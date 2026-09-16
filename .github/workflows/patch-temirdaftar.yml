@@ -1,0 +1,78 @@
+name: Patch TemirDaftar install
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor == 'housenafis07-ctrl' || github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch index.html
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace(
+              '<link rel="apple-touch-icon" href="logo.png.png">\n    <link rel="icon" href="logo.png.png">',
+              '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n    <link rel="icon" type="image/png" href="/icons/icon-192.png">'
+          )
+
+          old_button = '<button id="install-btn" onclick="showHomeScreenHelp()" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px;">📱</button>'
+          new_button = '<button id="install-btn" onclick="handleInstallButton()" aria-label="Ilovani yuklash" title="Ilovani yuklash" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px; cursor:pointer;">📱</button>'
+          s = s.replace(old_button, new_button)
+
+          marker = "        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */\n        function showHomeScreenHelp() {"
+          handler = """        /* ---- Ilovani o'rnatish/yuklash ---- */
+        function handleInstallButton() {
+            const ua = navigator.userAgent.toLowerCase();
+            const isIos = /iphone|ipad|ipod/.test(ua);
+
+            if (isIos) {
+                // iPhone/iPad APK o'rnata olmaydi: PWA'ni Home Screen'ga qo'shish yo'riqnomasini ko'rsatamiz.
+                showHomeScreenHelp();
+                return;
+            }
+
+            // Android/desktop: Vercel'dagi APK faylini yuklash.
+            window.location.href = '/TemirDaftar.apk';
+        }
+
+        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */
+        function showHomeScreenHelp() {"""
+          if 'function handleInstallButton()' not in s:
+              if marker not in s:
+                  raise SystemExit('Home Screen function marker not found')
+              s = s.replace(marker, handler, 1)
+
+          s = s.replace("navigator.serviceWorker.register('sw.js')", "navigator.serviceWorker.register('/sw.js')")
+
+          if 'const BOT_USERNAME = "qarzni_uzbot";' not in s:
+              raise SystemExit('Unexpected BOT_USERNAME value; aborting')
+          if 'https://yzicsoyufdghwiezqjsa.supabase.co' not in s:
+              raise SystemExit('Unexpected Supabase URL; aborting')
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit patch and remove one-shot workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-temirdaftar.yml
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix TemirDaftar install button and iOS icon"
+          git push origin HEAD:main
