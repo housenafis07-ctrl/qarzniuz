@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qarzdorlar Daftari Pro</title>
+
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="TemirDaftar">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="logo.png.png">
+    <link rel="icon" href="logo.png.png">
+
+    <!-- Supabase JS client — promo kodni serverda (Postgres funksiyasi orqali)
+         xavfsiz tekshirish uchun. Formula yoki kodlar ro'yxati bu faylda YO'Q —
+         hammasi Supabase'da, faqat redeem_promo_code() funksiyasi orqali ishlaydi. -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding-bottom: 85px; }
+
+        header {
+            background: var(--primary); color: white; padding: 12px 15px; text-align: center;
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .lang-switch {
+            background: rgba(255, 255, 255, 0.2); border: 1px solid white; color: white;
+            padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 12px; cursor: pointer;
+        }
+
+        .auth-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; z-index: 1000; padding: 25px; display: flex; flex-direction: column; justify-content: center;
+            overflow-y: auto;
+        }
+
+        .auth-warning {
+            background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-size: 12.5px;
+            padding: 10px 12px; border-radius: 8px; margin-bottom: 18px; line-height: 1.5;
+        }
+
+        .stats-card {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: white; margin: 15px; padding: 20px; border-radius: 12px;
+        }
+        .stats-card h3 { opacity: 0.9; font-size: 13px; }
+        .stats-card .total-amount { font-size: 26px; font-weight: bold; margin-top: 5px; }
+
+        .backup-warning {
+            display: none; margin: 0 15px 15px; background: #fef3c7; border: 1px solid #f59e0b;
+            color: #92400e; padding: 12px; border-radius: 8px; font-size: 12.5px; line-height: 1.5;
+        }
+        .backup-warning button {
+            margin-top: 8px; background: #f59e0b; color: white; border: none; padding: 7px 12px;
+            border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+        }
+
+        .nav-tabs {
+            display: flex; background: white; position: fixed; bottom: 0; width: 100%;
+            border-top: 1px solid #e2e8f0; z-index: 99; height: 70px;
+        }
+        .tab-btn {
+            flex: 1; padding: 8px; border: none; background: none; font-size: 13px; font-weight: 600;
+            color: #64748b; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer;
+        }
+        .tab-btn.active { color: var(--primary); }
+
+        .tab-btn-add {
+            background: var(--primary) !important; color: white !important; border-radius: 50%;
+            width: 60px; height: 60px; flex: 0 0 60px; margin-top: -20px;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4); border: 3px solid white !important;
+        }
+        .tab-btn-add .plus-icon { font-size: 32px; font-weight: bold; line-height: 1; }
+
+        .container { padding: 15px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #475569; }
+        input, textarea, select { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+
+        .btn {
+            width: 100%; padding: 14px; background: var(--primary); color: white;
+            border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;
+        }
+        .btn-success { background: var(--success); }
+        .btn-secondary { background: #64748b; margin-top: 8px; }
+
+        .customer-card {
+            background: var(--card); border-radius: 10px; padding: 15px; margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 4px solid var(--primary);
+            cursor: pointer; transition: transform 0.1s;
+        }
+        .customer-card:active { transform: scale(0.98); }
+        .customer-card.overdue { border-left-color: var(--danger); }
+        .customer-card.archived { border-left-color: var(--success); opacity: 0.85; }
+        .card-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .card-title { font-weight: bold; font-size: 16px; color: var(--primary); text-decoration: underline; }
+        .card-amount { font-weight: bold; color: var(--danger); font-size: 16px; }
+        .card-amount.paid-off { color: var(--success); }
+        .card-details { font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 10px; }
+
+        .card-actions { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid #f1f5f9; padding-top: 10px; }
+        .action-btn {
+            flex: 1 1 calc(50% - 6px); padding: 8px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600;
+            cursor: pointer; text-align: center; text-decoration: none;
+        }
+        .btn-sms { background: #e0e7ff; color: #4338ca; }
+        .btn-tg { background: #e0f2fe; color: #0369a1; }
+        .btn-pay { background: #dcfce7; color: #15803d; }
+        .btn-partial { background: #fef3c7; color: #d97706; }
+        .btn-add-more { background: #f3e8ff; color: #6b21a8; }
+
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 2000; justify-content: center; align-items: center; padding: 15px;
+        }
+        .modal-content {
+            background: white; border-radius: 12px; max-width: 500px; width: 100%; max-height: 85vh;
+            overflow-y: auto; padding: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; }
+        .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .history-list { margin-top: 15px; font-size: 13px; }
+        .history-item { padding: 8px 0; border-bottom: 1px dashed #e2e8f0; display: flex; justify-content: space-between; }
+        .history-item.plus { color: var(--danger); }
+        .history-item.minus { color: var(--success); }
+
+        .pay-box { background: white; border: 2px dashed #2563eb; padding: 15px; border-radius: 10px; text-align: center; margin-top: 15px; }
+        .card-num { font-size: 18px; font-weight: bold; color: #1e293b; letter-spacing: 1px; margin: 10px 0; word-break: break-all; }
+        .copy-btn { background: #e2e8f0; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; }
+
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-bottom: 10px; }
+        .badge-free { background: #e2e8f0; color: #475569; }
+        .badge-pro { background: #fef3c7; color: #b45309; }
+
+        .tools-box { background: white; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #cbd5e1; }
+        .filter-box { display: flex; gap: 8px; margin-bottom: 15px; }
+
+        .honesty-note {
+            font-size: 11.5px; color: #94a3b8; margin-top: 10px; line-height: 1.5; text-align: left;
+        }
+        .last-backup-note { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+
+        .home-screen-modal .modal-content { max-width: 380px; }
+    </style>
+</head>
+<body>
+
+    <!-- AVTORIZATSIYA OYNASI -->
+    <div id="auth-screen" class="auth-screen">
+        <h2 id="auth-title" style="margin-bottom: 10px; text-align: center;">Tizimga kirish</h2>
+        <p id="auth-subtitle" style="color: #64748b; text-align: center; margin-bottom: 20px; font-size: 14px;">Telefon raqamingizni kiriting</p>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button type="button" id="btn-mode-login" onclick="switchAuthMode('login')" class="btn" style="flex:1; background:#2563eb;">Kirish</button>
+            <button type="button" id="btn-mode-register" onclick="switchAuthMode('register')" class="btn" style="flex:1; background:#64748b;">Ro'yxatdan o'tish</button>
+        </div>
+
+        <form id="auth-form">
+            <div class="form-group">
+                <label id="lbl-phone">Telefon raqamingiz</label>
+                <input type="tel" id="auth-phone" placeholder="+998901234567" required>
+            </div>
+
+            <div id="reg-fields" style="display: none;">
+                <div class="form-group">
+                    <label id="lbl-name">Ismingiz</label>
+                    <input type="text" id="auth-name" placeholder="Masalan: Elbek">
+                </div>
+                <div class="form-group">
+                    <label id="lbl-shop">Do'kon nomi</label>
+                    <input type="text" id="auth-shop" placeholder="Masalan: Baraka Market">
+                </div>
+            </div>
+
+            <button type="submit" id="auth-submit-btn" class="btn">Kirish</button>
+        </form>
+
+        <div class="auth-warning" id="auth-warning-note">
+            ⚠️ Ma'lumotlaringiz ushbu telefon/brauzerda saqlanadi. Brauzer tarixi tozalansa yoki qurilma almashtirilsa, zaxira nusxasiz ma'lumotlar tiklanmaydi. Muntazam zaxira nusxa (backup) oling — Premium bo'limida.
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header>
+        <h2 id="header-shop-name">Qarzdorlar Daftari</h2>
+        <div style="display: flex; gap: 6px; align-items: center;">
+            <button class="lang-switch" onclick="toggleLanguage()"><span id="lang-btn-text">🌐 RU</span></button>
+            <button id="install-btn" onclick="showHomeScreenHelp()" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px;">📱</button>
+            <button onclick="logoutApp()" style="background:#ef4444; color:white; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;" id="btn-logout">🚪 Chiqish</button>
+        </div>
+    </header>
+
+    <!-- ASOSIY RO'YXAT BO'LIMI -->
+    <div id="tab-list" class="tab-content active">
+        <div class="stats-card">
+            <h3 id="lbl-total-debt-header">UMUMIY QARZDORLIK</h3>
+            <div class="total-amount" id="total-debt-sum">0 so'm</div>
+        </div>
+
+        <div id="backup-warning-banner" class="backup-warning">
+            <span id="backup-warning-text"></span><br>
+            <button onclick="exportDataJSON()" id="backup-warning-btn">Hozir zaxira olish</button>
+        </div>
+
+        <div class="container">
+            <div class="filter-box">
+                <input type="text" id="search-input" placeholder="🔍 Qidirish..." oninput="renderCustomers()" style="flex:2;">
+                <select id="sort-select" onchange="renderCustomers()" style="flex:1; padding:5px;">
+                    <option value="all" id="opt-all">Barchasi</option>
+                    <option value="overdue" id="opt-overdue">⏰ Muddati o'tganlar</option>
+                    <option value="amount" id="opt-amount">💰 Eng katta qarzlar</option>
+                    <option value="paid" id="opt-paid">✅ To'langanlar (arxiv)</option>
+                </select>
+            </div>
+            <div id="customer-list"></div>
+        </div>
+    </div>
+
+    <!-- QARZ QO'SHISH BO'LIMI -->
+    <div id="tab-add" class="tab-content">
+        <div class="container">
+            <h3 style="margin-bottom: 15px;" id="title-add-debt">Yangi qarz yozish</h3>
+            <form id="add-debt-form">
+                <div class="form-group">
+                    <label id="lbl-cust-name">Mijoz ismi</label>
+                    <input type="text" id="cust-name" placeholder="Masalan: Ali Valiyev" required>
+                </div>
+                <div class="form-group">
+                    <label id="lbl-cust-phone">Telefon raqami</label>
+                    <input type="tel" id="cust-phone" placeholder="+998901234567" required>
+                </div>
+                <div class="form-group">
+                    <label id="lbl-cust-tg">Telegram Username (ixtiyoriy)</label>
+                    <input type="text" id="cust-tg" placeholder="username (@ siz)">
+                </div>
+                <div class="form-group">
+                    <label id="lbl-cust-amount">Qarz summasi (so'm)</label>
+                    <input type="number" id="cust-amount" placeholder="100000" required>
+                </div>
+                <div class="form-group">
+                    <label id="lbl-date-given">Qarz olingan sana</label>
+                    <input type="date" id="cust-date-given" required>
+                </div>
+                <div class="form-group">
+                    <label id="lbl-date-due">To'lash kerak bo'lgan sana</label>
+                    <input type="date" id="cust-date-due" required>
+                </div>
+                <div class="form-group">
+                    <label id="lbl-cust-note">Izoh / Mahsulotlar</label>
+                    <textarea id="cust-note" rows="2" placeholder="Masalan: 1 qop un"></textarea>
+                </div>
+                <button type="submit" class="btn" id="btn-save-debt">Saqlash</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- PREMIUM BO'LIM -->
+    <div id="tab-pro" class="tab-content">
+        <div class="container">
+            <div id="pro-status-box"></div>
+
+            <h3 id="title-pro-heading">👑 Premium Tarifga O'tish (30 kun)</h3>
+
+            <div class="pay-box">
+                <h4 id="title-uzcard-pay">Uzcard orqali to'lov qiling</h4>
+                <p style="font-size: 13px; color: #475569; margin-top: 5px;" id="lbl-monthly-price">Oylik obuna narxi: <b>25 000 so'm</b></p>
+                <div class="card-num" id="card-number">5614 6819 1829 8047</div>
+                <button class="copy-btn" onclick="copyCard()" id="btn-copy-card">Karta raqamidan nusxalash 📋</button>
+                <br><br>
+                <button class="btn btn-success" onclick="sendReceiptToBot()" id="btn-send-bot">Telegram Botga Chek yuborish ✈️</button>
+                <p class="honesty-note" id="pay-honesty-note">To'lovni yuborgach, egasi tekshirib, sizga shaxsan faollashtirish kodini yuboradi. Bu jarayon hozircha qo'lda tasdiqlanadi.</p>
+            </div>
+
+            <div style="background: white; padding: 15px; border-radius: 10px; margin-top: 15px; border: 1px solid #cbd5e1;">
+                <h4 id="title-promo-input">🔑 Faollashtirish kodini kiriting</h4>
+                <div style="display: flex; gap: 8px; margin-top:10px;">
+                    <input type="text" id="promo-input" placeholder="PRO-XXXXX" style="text-transform: uppercase;">
+                    <button onclick="activatePro()" class="btn" style="width: auto; padding: 10px 15px; background: #10b981;" id="btn-activate-promo">Aktivlash</button>
+                </div>
+            </div>
+
+            <div class="tools-box">
+                <h4 id="title-tools-heading">💾 Ma'lumotlar Zaxirasi & Excel</h4>
+                <p style="font-size: 12px; color:#64748b; margin-bottom: 10px;" id="lbl-tools-sub">Qarzlarni faylga saqlab qo'ying yoki Excel ga yuklang.</p>
+                <p class="last-backup-note" id="last-backup-note"></p>
+                <button class="btn" onclick="exportDataJSON()" style="background:#475569; margin-bottom:8px;" id="btn-export-json">📁 Backup Saqlash (JSON)</button>
+                <button class="btn" onclick="exportToCSV()" style="background:#15803d; margin-bottom:8px;" id="btn-export-csv">📊 Excel faylga yuklash (CSV)</button>
+                <input type="file" id="import-file" onchange="importDataJSON(event)" style="display:none;">
+                <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()" id="btn-import-json">📥 Backup tiklash (JSON)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- BATAFSIL MODAL OYNASI -->
+    <div id="customer-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-cust-name">Mijoz Ismi</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modal-cust-body"></div>
+        </div>
+    </div>
+
+    <!-- BOSH EKRANGA QO'SHISH YO'RIQNOMASI -->
+    <div id="home-screen-modal" class="modal home-screen-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="home-modal-title">Bosh ekranga qo'shish</h3>
+                <button class="modal-close" onclick="closeHomeScreenHelp()">&times;</button>
+            </div>
+            <p id="home-modal-body" style="font-size: 14px; line-height: 1.6;"></p>
+        </div>
+    </div>
+
+    <!-- BOTTOM NAV TABLAR -->
+    <div class="nav-tabs">
+        <button class="tab-btn active" id="btn-tab-list">
+            <span style="font-size: 20px;">📋</span>
+            <span id="tab-label-list">Ro'yxat</span>
+        </button>
+        <button class="tab-btn tab-btn-add" id="btn-tab-add">
+            <span class="plus-icon">+</span>
+        </button>
+        <button class="tab-btn" id="btn-tab-pro">
+            <span style="font-size: 20px;">⭐</span>
+            <span id="tab-label-pro">Premium</span>
+        </button>
+    </div>
+
+    <script>
+        /* =========================================================
+           SOZLAMALAR
+           - BOT_USERNAME: o'zingizning haqiqiy Telegram bot username'ingizga almashtiring
+           - CARD_NUMBER: to'lov qabul qilinadigan karta
+           - VALID_PROMO_CODES: siz (admin) to'lovni qo'lda tasdiqlagach mijozga beradigan kodlar ro'yxati.
+             MUHIM: bu kodlar shu JS faylida ko'rinadi (har qanday statik HTML fayl uchun tabiiy cheklov) —
+             ya'ni texnik jihatdan tajribali foydalanuvchi kodlarni ko'rishi mumkin. Chinakam xavfsiz
+             tekshiruv uchun kelajakda serverga (masalan Click/Payme Merchant API) ulanish tavsiya etiladi.
+             Hozircha bu ro'yxat oldingi versiyadagi "formula orqali o'zi kod yasash" muammosini yo'q qiladi —
+             chunki kodlar hech qanday formula bilan hisoblanmaydi, faqat siz tarqatgan tayyor kodlar ishlaydi.
+        ========================================================= */
+        const BOT_USERNAME = "qarzni_uzbot";
+        const CARD_NUMBER = "5614681918298047";
+
+        // Supabase — promo kodni serverda tekshirish uchun.
+        // anon key ochiq bo'lishi normal (u faqat "redeem_promo_code" funksiyasini
+        // chaqirishga ruxsat beradi, jadvalni o'qiy/yoza olmaydi — SQL faylga qarang).
+        const SUPABASE_URL = "https://yzicsoyufdghwiezqjsa.supabase.co";   // <-- o'zingiznikiga almashtiring
+        const SUPABASE_ANON_KEY = "sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM";             // <-- o'zingiznikiga almashtiring
+        const supabaseClient = (SUPABASE_URL.indexOf('XXXX') === -1 && window.supabase)
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+
+        let currentUser = JSON.parse(localStorage.getItem('shop_user')) || null;
+        let customers = [];
+        let authMode = 'login';
+        let currentLang = localStorage.getItem('app_lang') || 'uz';
+
+        const dictionary = {
+            uz: {
+                langBtn: "🌐 RU",
+                authLoginTitle: "Tizimga kirish",
+                authRegTitle: "Yangi profil yaratish",
+                authLoginSub: "Telefon raqamingizni kiriting",
+                authRegSub: "Do'kon ma'lumotlarini kiriting",
+                authWarning: "⚠️ Ma'lumotlaringiz ushbu telefon/brauzerda saqlanadi. Brauzer tarixi tozalansa yoki qurilma almashtirilsa, zaxira nusxasiz ma'lumotlar tiklanmaydi. Muntazam zaxira nusxa (backup) oling — Premium bo'limida.",
+                btnLoginMode: "Kirish",
+                btnRegMode: "Ro'yxatdan o'tish",
+                lblPhone: "Telefon raqamingiz",
+                lblName: "Ismingiz",
+                lblShop: "Do'kon nomi",
+                btnLogout: "🚪 Chiqish",
+                totalDebt: "UMUMIY QARZDORLIK",
+                searchPlaceholder: "🔍 Qidirish...",
+                optAll: "Barchasi",
+                optOverdue: "⏰ Muddati o'tganlar",
+                optAmount: "💰 Eng katta qarzlar",
+                optPaid: "✅ To'langanlar (arxiv)",
+                tabList: "Ro'yxat",
+                tabPro: "Premium",
+                titleAddDebt: "Yangi qarz yozish",
+                lblCustName: "Mijoz ismi",
+                lblCustPhone: "Telefon raqami",
+                lblCustTg: "Telegram Username (ixtiyoriy)",
+                lblCustAmount: "Qarz summasi (so'm)",
+                lblDateGiven: "Qarz olingan sana",
+                lblDateDue: "To'lash kerak bo'lgan sana",
+                lblCustNote: "Izoh / Mahsulotlar",
+                btnSaveDebt: "Saqlash",
+                titleProHeading: "👑 Premium Tarifga O'tish (30 kun)",
+                titlePromoInput: "🔑 Faollashtirish kodini kiriting",
+                btnActivatePromo: "Aktivlash",
+                titleUzcardPay: "Uzcard orqali to'lov qiling",
+                lblMonthlyPrice: "Oylik obuna narxi: <b>25 000 so'm</b>",
+                btnCopyCard: "Karta raqamidan nusxalash 📋",
+                btnSendBot: "Telegram Botga Chek yuborish ✈️",
+                payHonestyNote: "To'lovni yuborgach, egasi tekshirib, sizga shaxsan faollashtirish kodini yuboradi. Bu jarayon hozircha qo'lda tasdiqlanadi.",
+                titleToolsHeading: "💾 Ma'lumotlar Zaxirasi & Excel",
+                lblToolsSub: "Qarzlarni faylga saqlab qo'ying yoki Excel ga yuklang.",
+                btnExportJson: "📁 Backup Saqlash (JSON)",
+                btnExportCsv: "📊 Excel faylga yuklash (CSV)",
+                btnImportJson: "📥 Backup tiklash (JSON)",
+                btnSms: "💬 SMS",
+                btnTg: "✈️ Telegram",
+                btnPartial: "💰 Qisman to'lov",
+                btnAddMore: "➕ Qarz qo'shish",
+                btnPayFull: "✅ To'liq yopish",
+                clickForDetails: "👆 Ism ustiga bosib to'liq tarixni ko'ring",
+                sumUnit: "so'm",
+                overdueLabel: "(Muddati o'tdi)",
+                paidTag: "✅ To'langan",
+                noHistory: "Tarix mavjud emas.",
+                lastBackupNever: "Siz hali zaxira nusxa olmagansiz.",
+                lastBackupOn: "Oxirgi zaxira: ",
+                backupWarningText: "⚠️ Siz uzoq vaqtdan beri zaxira nusxa olmagansiz. Ma'lumotlaringiz faqat shu qurilmada saqlanmoqda.",
+                backupWarningBtn: "Hozir zaxira olish",
+                alertTrialGiven: "🎁 Sizga 3 kunlik Bepul Sinov Premium obunasi berildi!",
+                alertPhoneRequired: "Iltimos, telefon raqamingizni kiriting!",
+                alertLoginNotFound: "❌ Bunday telefon raqamli profil topilmadi!\n\nIltimos, avval 'Ro'yxatdan o'tish' tugmasini bosing.",
+                alertAlreadyRegistered: "⚠️ Bu telefon raqam allaqachon ro'yxatdan o'tgan! 'Kirish' tugmasi orqali kiring.",
+                alertRegisterSuccess: "🎉 Ro'yxatdan muvaffaqiyatli o'tdingiz!",
+                confirmLogout: "Haqiqatan ham tizimdan chiqmoqchimisiz?",
+                alertLimitReached: "⚠️ Bepul tarifda ko'pi bilan 5 ta qarzdor kiritish mumkin!\n\nPremium faollashtiring.",
+                alertDebtSaved: "Qarz saqlandi!",
+                promptPartialAmount: "qancha to'lov qildi? (Jami qarz: {amount} so'm)",
+                alertPartialUpdated: "Qarz yangilandi! Qolgan qarz: {amount} so'm",
+                alertPartialExceed: "❌ Kiritilgan summa jami qarzdan ko'p!",
+                promptAddAmount: "uchun yana qancha summa qarz qo'shilsin?",
+                promptAddItem: "Qanday mahsulotlar oldi? (Masalan: 2 ta yog', 1 qop un)",
+                itemNotSpecified: "Mahsulotlar nomi kiritilmadi",
+                alertDebtAdded: "Qarz qo'shildi! Jami qarz: {amount} so'm",
+                confirmPayFull: "Qarz to'liq to'landimi? Yozuv 'To'langanlar' arxiviga ko'chiriladi (o'chirilmaydi).",
+                alertPayFullDone: "✅ To'liq to'landi va arxivga ko'chirildi.",
+                tgCopyAlert: "📋 Eslatma matni nusxalandi!\n\nChat ochilgach, matnni joylashtiring (Paste).",
+                cardCopyAlert: "Uzcard nusxalandi: ",
+                receiptCopyAlert: "📋 Chek ma'lumotlari nusxalandi! Bot chati ochilgach, matnni joylashtirib yuboring.",
+                codeFormatWrong: "❌ Noto'g'ri kod! Kod bo'sh bo'lmasligi va admin bergan ko'rinishda bo'lishi kerak.",
+                codeUsed: "❌ Bu kod allaqachon ishlatilgan!",
+                codeWrong: "❌ Noto'g'ri yoki allaqachon ishlatilgan kod. Bu kod administrator tomonidan berilmagan bo'lishi mumkin.",
+                supabaseNotConfigured: "⚠️ Kod tekshirish tizimi hali sozlanmagan. Administratorga murojaat qiling.",
+                networkError: "⚠️ Internetga ulanishda xatolik. Iltimos, aloqani tekshirib qayta urinib ko'ring.",
+                codeActivated: "🎉 Premium 30 kunga faollashtirildi!",
+                premiumExpiredAlert: "⚠️ Premium obunangiz muddati tugadi.",
+                importSuccess: "✅ Ma'lumotlar qayta tiklandi!",
+                importFail: "❌ Noto'g'ri JSON fayli!",
+                badgeProActive: "PRO AKTIV",
+                badgeFree: "BEPUL TARIF (Max 5 ta qarzdor)",
+                proExpireLabel: "Amal qilish muddati: ",
+                homeModalTitle: "Bosh ekranga qo'shish",
+                homeModalAndroid: "Android (Chrome): Brauzer menyusini (⋮) oching va 'Bosh ekranga qo'shish' bandini tanlang.",
+                homeModalIos: "iPhone (Safari): Pastdagi 'Ulashish' (Share) tugmasini bosing, so'ng 'Asosiy ekranga qo'shish' (Add to Home Screen) bandini tanlang."
+            },
+            ru: {
+                langBtn: "🌐 UZ",
+                authLoginTitle: "Vhod v sistemu",
+                authRegTitle: "Sozdanie profilya",
+                authLoginSub: "Vvedite vash nomer telefona",
+                authRegSub: "Vvedite dannye magazina",
+                authWarning: "⚠️ Vashi dannye khranyatsya tolko na etom telefone/brauzere. Esli istoriya brauzera budet ochishchena ili ustroystvo zamenat, dannye bez rezervnoy kopii ne vosstanovyatsya. Regulyarno delayte rezervnuyu kopiyu — v razdele Premium.",
+                btnLoginMode: "Vkhod",
+                btnRegMode: "Registratsiya",
+                lblPhone: "Nomer telefona",
+                lblName: "Vashe imya",
+                lblShop: "Nazvanie magazina",
+                btnLogout: "🚪 Vykhod",
+                totalDebt: "OBSHCHAYA ZADOLZHENNOST",
+                searchPlaceholder: "🔍 Poisk...",
+                optAll: "Vse",
+                optOverdue: "⏰ Prosrochennye",
+                optAmount: "💰 Samye bolshie dolgi",
+                optPaid: "✅ Oplachennye (arkhiv)",
+                tabList: "Spisok",
+                tabPro: "Premium",
+                titleAddDebt: "Zapisat novy dolg",
+                lblCustName: "Imya klienta",
+                lblCustPhone: "Nomer telefona",
+                lblCustTg: "Telegram Username (neobyazatelno)",
+                lblCustAmount: "Summa dolga (sum)",
+                lblDateGiven: "Data vydachi dolga",
+                lblDateDue: "Srok oplaty",
+                lblCustNote: "Primechanie / Tovary",
+                btnSaveDebt: "Sokhranit",
+                titleProHeading: "👑 Perekhod na Premium (30 dney)",
+                titlePromoInput: "🔑 Vvedite kod aktivatsii",
+                btnActivatePromo: "Aktivirovat",
+                titleUzcardPay: "Oplata cherez Uzcard",
+                lblMonthlyPrice: "Stoimost podpiski: <b>25 000 sum/mes</b>",
+                btnCopyCard: "Skopirovat nomer karty 📋",
+                btnSendBot: "Otpravit chek v Telegram Bot ✈️",
+                payHonestyNote: "Posle otpravki oplaty vladelets proverit i lichno prishlet vam kod aktivatsii. Poka etot protsess podtverzhdaetsya vruchnuyu.",
+                titleToolsHeading: "💾 Rezervnoe kopirovanie i Excel",
+                lblToolsSub: "Sokhranite dolgi v fayl ili vygruzite v Excel.",
+                btnExportJson: "📁 Sokhranit Backup (JSON)",
+                btnExportCsv: "📊 Vygruzit v Excel (CSV)",
+                btnImportJson: "📥 Vosstanovit Backup (JSON)",
+                btnSms: "💬 SMS",
+                btnTg: "✈️ Telegram",
+                btnPartial: "💰 Chastichnaya oplata",
+                btnAddMore: "➕ Dobavit dolg",
+                btnPayFull: "✅ Zakryt polnostyu",
+                clickForDetails: "👆 Nazhmite na imya dlya podrobnostey",
+                sumUnit: "sum",
+                overdueLabel: "(Prosrocheno)",
+                paidTag: "✅ Oplacheno",
+                noHistory: "Istoriya otsutstvuet.",
+                lastBackupNever: "Vy eshche ne delali rezervnuyu kopiyu.",
+                lastBackupOn: "Poslednyaya kopiya: ",
+                backupWarningText: "⚠️ Vy davno ne delali rezervnuyu kopiyu. Dannye khranyatsya tolko na etom ustroystve.",
+                backupWarningBtn: "Sdelat kopiyu seychas",
+                alertTrialGiven: "🎁 Vam predostavlena besplatnaya 3-dnevnaya Premium podписка!",
+                alertPhoneRequired: "Pozhaluysta, vvedite nomer telefona!",
+                alertLoginNotFound: "❌ Profil s takim nomerom ne nayden!\n\nSnachala nazhmite 'Registratsiya'.",
+                alertAlreadyRegistered: "⚠️ Etot nomer uzhe zaregistrirovan! Voydite cherez 'Vkhod'.",
+                alertRegisterSuccess: "🎉 Vy uspeshno zaregistrirovany!",
+                confirmLogout: "Vy deystvitelno khotite viyti?",
+                alertLimitReached: "⚠️ Na besplatnom tarife mozhno dobavit ne bolee 5 dolzhnikov!\n\nAktiviruyte Premium.",
+                alertDebtSaved: "Dolg sokhranen!",
+                promptPartialAmount: "skolko oplatil? (Obshchy dolg: {amount} sum)",
+                alertPartialUpdated: "Dolg obnovlen! Ostatok: {amount} sum",
+                alertPartialExceed: "❌ Vvedennaya summa bolshe obshchego dolga!",
+                promptAddAmount: "kakuyu summu dolga dobavit?",
+                promptAddItem: "Kakie tovary vzyal? (Naprimer: 2 masla, 1 meshok muki)",
+                itemNotSpecified: "Nazvanie tovara ne ukazano",
+                alertDebtAdded: "Dolg dobavlen! Obshchy dolg: {amount} sum",
+                confirmPayFull: "Dolg polnostyu oplachen? Zapis budet perenesena v arkhiv 'Oplachennye' (ne udalyaetsya).",
+                alertPayFullDone: "✅ Polnostyu oplacheno i pereneseno v arkhiv.",
+                tgCopyAlert: "📋 Tekst napominaniya skopirovan!\n\nPosle otkrytiya chata vstavte tekst (Paste).",
+                cardCopyAlert: "Nomer karty skopirovan: ",
+                receiptCopyAlert: "📋 Dannye cheka skopirovany! Posle otkrytiya chata s botom vstavte i otpravte tekst.",
+                codeFormatWrong: "❌ Nevernyy kod! Kod ne dolzhen byt pustym i dolzhen byt v formate, vydannom administratorom.",
+                codeUsed: "❌ Etot kod uzhe ispolzovan!",
+                codeWrong: "❌ Nevernyy ili uzhe ispolzovannyy kod. Vozmozhno, kod ne byl vydan administratorom.",
+                supabaseNotConfigured: "⚠️ Sistema proverki koda eshche ne nastroena. Obratites k administratoru.",
+                networkError: "⚠️ Oshibka podklyucheniya k internetu. Proverte set i poprobuyte snova.",
+                codeActivated: "🎉 Premium aktivirован на 30 dney!",
+                premiumExpiredAlert: "⚠️ Srok deystviya vashey Premium podpiski istek.",
+                importSuccess: "✅ Dannye vosstanovleny!",
+                importFail: "❌ Nevernyy JSON fayl!",
+                badgeProActive: "PRO AKTIVEN",
+                badgeFree: "BESPLATNYY TARIF (Maks 5 dolzhnikov)",
+                proExpireLabel: "Deystvitelen do: ",
+                homeModalTitle: "Dobavit na glavny ekran",
+                homeModalAndroid: "Android (Chrome): otkroyte menyu brauzera (⋮) i vyberite 'Dobavit na glavny ekran'.",
+                homeModalIos: "iPhone (Safari): nazhmite knopku 'Podelitsya' (Share) vnizu, zatem vyberite 'Na ekran Domoy' (Add to Home Screen)."
+            }
+        };
+
+        function L(key) {
+            return (dictionary[currentLang] && dictionary[currentLang][key]) || key;
+        }
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('app_lang', lang);
+            const t = dictionary[lang];
+
+            document.getElementById('lang-btn-text').innerText = t.langBtn;
+            document.getElementById('lbl-phone').innerText = t.lblPhone;
+            document.getElementById('lbl-name').innerText = t.lblName;
+            document.getElementById('lbl-shop').innerText = t.lblShop;
+            document.getElementById('btn-mode-login').innerText = t.btnLoginMode;
+            document.getElementById('btn-mode-register').innerText = t.btnRegMode;
+            document.getElementById('auth-warning-note').innerText = t.authWarning;
+            document.getElementById('btn-logout').innerText = t.btnLogout;
+            document.getElementById('lbl-total-debt-header').innerText = t.totalDebt;
+            document.getElementById('search-input').placeholder = t.searchPlaceholder;
+            document.getElementById('opt-all').innerText = t.optAll;
+            document.getElementById('opt-overdue').innerText = t.optOverdue;
+            document.getElementById('opt-amount').innerText = t.optAmount;
+            document.getElementById('opt-paid').innerText = t.optPaid;
+            document.getElementById('tab-label-list').innerText = t.tabList;
+            document.getElementById('tab-label-pro').innerText = t.tabPro;
+            document.getElementById('title-add-debt').innerText = t.titleAddDebt;
+            document.getElementById('lbl-cust-name').innerText = t.lblCustName;
+            document.getElementById('lbl-cust-phone').innerText = t.lblCustPhone;
+            document.getElementById('lbl-cust-tg').innerText = t.lblCustTg;
+            document.getElementById('lbl-cust-amount').innerText = t.lblCustAmount;
+            document.getElementById('lbl-date-given').innerText = t.lblDateGiven;
+            document.getElementById('lbl-date-due').innerText = t.lblDateDue;
+            document.getElementById('lbl-cust-note').innerText = t.lblCustNote;
+            document.getElementById('btn-save-debt').innerText = t.btnSaveDebt;
+            document.getElementById('title-pro-heading').innerText = t.titleProHeading;
+            document.getElementById('title-promo-input').innerText = t.titlePromoInput;
+            document.getElementById('btn-activate-promo').innerText = t.btnActivatePromo;
+            document.getElementById('title-uzcard-pay').innerText = t.titleUzcardPay;
+            document.getElementById('lbl-monthly-price').innerHTML = t.lblMonthlyPrice;
+            document.getElementById('btn-copy-card').innerText = t.btnCopyCard;
+            document.getElementById('btn-send-bot').innerText = t.btnSendBot;
+            document.getElementById('pay-honesty-note').innerText = t.payHonestyNote;
+            document.getElementById('title-tools-heading').innerText = t.titleToolsHeading;
+            document.getElementById('lbl-tools-sub').innerText = t.lblToolsSub;
+            document.getElementById('btn-export-json').innerText = t.btnExportJson;
+            document.getElementById('btn-export-csv').innerText = t.btnExportCsv;
+            document.getElementById('btn-import-json').innerText = t.btnImportJson;
+            document.getElementById('backup-warning-text').innerText = t.backupWarningText;
+            document.getElementById('backup-warning-btn').innerText = t.backupWarningBtn;
+            document.getElementById('home-modal-title').innerText = t.homeModalTitle;
+
+            if (currentUser) {
+                updateLastBackupNote();
+            }
+            renderCustomers();
+        }
+
+        function toggleLanguage() {
+            const newLang = currentLang === 'uz' ? 'ru' : 'uz';
+            setLanguage(newLang);
+        }
+
+        const authScreen = document.getElementById('auth-screen');
+
+        function initApp() {
+            setLanguage(currentLang);
+            if (!currentUser) {
+                authScreen.style.display = 'flex';
+                customers = [];
+            } else {
+                authScreen.style.display = 'none';
+                document.getElementById('header-shop-name').innerText = currentUser.shopName || "Qarzdorlar Daftari";
+
+                const userDebtsKey = 'shop_debts_' + currentUser.phone;
+                customers = JSON.parse(localStorage.getItem(userDebtsKey)) || [];
+
+                if (!localStorage.getItem('trial_given_' + currentUser.phone)) {
+                    const trialExpire = new Date();
+                    trialExpire.setDate(trialExpire.getDate() + 3);
+                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
+                    localStorage.setItem('premium_expire_date_' + currentUser.phone, trialExpire.toISOString());
+                    localStorage.setItem('trial_given_' + currentUser.phone, 'true');
+                    alert(L('alertTrialGiven'));
+                }
+                renderCustomers();
+                checkPremiumStatus();
+                updateLastBackupNote();
+                checkBackupReminder();
+            }
+        }
+
+        function saveCustomersToStorage() {
+            if (currentUser && currentUser.phone) {
+                localStorage.setItem('shop_debts_' + currentUser.phone, JSON.stringify(customers));
+            }
+        }
+
+        function switchAuthMode(mode) {
+            authMode = mode;
+            const regFields = document.getElementById('reg-fields');
+            const submitBtn = document.getElementById('auth-submit-btn');
+            const title = document.getElementById('auth-title');
+            const subtitle = document.getElementById('auth-subtitle');
+            const btnLogin = document.getElementById('btn-mode-login');
+            const btnReg = document.getElementById('btn-mode-register');
+            const t = dictionary[currentLang];
+
+            if (mode === 'register') {
+                regFields.style.display = 'block';
+                submitBtn.innerText = t.btnRegMode;
+                title.innerText = t.authRegTitle;
+                subtitle.innerText = t.authRegSub;
+                btnReg.style.background = "#2563eb";
+                btnLogin.style.background = "#64748b";
+                document.getElementById('auth-name').required = true;
+                document.getElementById('auth-shop').required = true;
+            } else {
+                regFields.style.display = 'none';
+                submitBtn.innerText = t.btnLoginMode;
+                title.innerText = t.authLoginTitle;
+                subtitle.innerText = t.authLoginSub;
+                btnLogin.style.background = "#2563eb";
+                btnReg.style.background = "#64748b";
+                document.getElementById('auth-name').required = false;
+                document.getElementById('auth-shop').required = false;
+            }
+        }
+
+        document.getElementById('auth-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const phone = document.getElementById('auth-phone').value.trim().replace(/[^0-9]/g, '');
+            const name = document.getElementById('auth-name').value.trim();
+            const shop = document.getElementById('auth-shop').value.trim();
+
+            if (!phone) {
+                alert(L('alertPhoneRequired'));
+                return;
+            }
+
+            let usersBase = JSON.parse(localStorage.getItem('registered_users_base')) || {};
+
+            if (authMode === 'login') {
+                if (usersBase[phone]) {
+                    currentUser = usersBase[phone];
+                    localStorage.setItem('shop_user', JSON.stringify(currentUser));
+                    initApp();
+                } else {
+                    alert(L('alertLoginNotFound'));
+                }
+            } else {
+                if (usersBase[phone]) {
+                    alert(L('alertAlreadyRegistered'));
+                    switchAuthMode('login');
+                    return;
+                }
+
+                currentUser = {
+                    phone: phone,
+                    name: name || 'Foydalanuvchi',
+                    shopName: shop || "Mening Do'konim"
+                };
+
+                usersBase[phone] = currentUser;
+                localStorage.setItem('registered_users_base', JSON.stringify(usersBase));
+                localStorage.setItem('shop_user', JSON.stringify(currentUser));
+
+                alert(L('alertRegisterSuccess'));
+                initApp();
+            }
+        });
+
+        function logoutApp() {
+            if (confirm(L('confirmLogout'))) {
+                localStorage.removeItem('shop_user');
+                currentUser = null;
+                customers = [];
+                window.location.reload();
+            }
+        }
+
+        document.getElementById('btn-tab-list').addEventListener('click', function() { switchTab('list', this); });
+        document.getElementById('btn-tab-add').addEventListener('click', function() { switchTab('add', this); });
+        document.getElementById('btn-tab-pro').addEventListener('click', function() { switchTab('pro', this); });
+
+        function switchTab(tabName, btnEl) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+
+            document.getElementById('tab-' + tabName).classList.add('active');
+            btnEl.classList.add('active');
+
+            if (tabName === 'list') renderCustomers();
+            if (tabName === 'pro') { renderProStatus(); updateLastBackupNote(); }
+        }
+
+        document.getElementById('cust-date-given').valueAsDate = new Date();
+
+        document.getElementById('add-debt-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
+            const activeCount = customers.filter(c => !c.archived).length;
+
+            if (!isPro && activeCount >= 5) {
+                alert(L('alertLimitReached'));
+                switchTab('pro', document.getElementById('btn-tab-pro'));
+                return;
+            }
+
+            let tgNick = document.getElementById('cust-tg').value.trim().replace('@', '');
+            const initialAmount = parseFloat(document.getElementById('cust-amount').value);
+            const initialNote = document.getElementById('cust-note').value;
+            const dateGiven = document.getElementById('cust-date-given').value;
+
+            const newCustomer = {
+                id: Date.now(),
+                name: document.getElementById('cust-name').value,
+                phone: document.getElementById('cust-phone').value,
+                tgUsername: tgNick,
+                amount: initialAmount,
+                dateGiven: dateGiven,
+                dateDue: document.getElementById('cust-date-due').value,
+                note: initialNote,
+                archived: false,
+                history: [
+                    {
+                        date: dateGiven,
+                        type: 'Dastlabki qarz',
+                        amount: initialAmount,
+                        item: initialNote || 'Dastlabki mahsulotlar'
+                    }
+                ]
+            };
+
+            customers.push(newCustomer);
+            saveCustomersToStorage();
+            this.reset();
+            document.getElementById('cust-date-given').valueAsDate = new Date();
+            alert(L('alertDebtSaved'));
+            switchTab('list', document.getElementById('btn-tab-list'));
+        });
+
+        function renderCustomers() {
+            const t = dictionary[currentLang];
+            const listContainer = document.getElementById('customer-list');
+            const searchVal = document.getElementById('search-input').value.toLowerCase();
+            const sortVal = document.getElementById('sort-select').value;
+            listContainer.innerHTML = '';
+
+            let totalDebt = 0;
+            const today = new Date().toISOString().split('T')[0];
+
+            let filtered = customers.filter(c => c.name.toLowerCase().includes(searchVal));
+
+            if (sortVal === 'paid') {
+                filtered = filtered.filter(c => c.archived);
+            } else {
+                filtered = filtered.filter(c => !c.archived);
+                if (sortVal === 'overdue') {
+                    filtered = filtered.filter(c => c.dateDue < today);
+                } else if (sortVal === 'amount') {
+                    filtered.sort((a, b) => b.amount - a.amount);
+                }
+            }
+
+            filtered.forEach(c => {
+                if (!c.archived) totalDebt += c.amount;
+                const isOverdue = !c.archived && c.dateDue < today;
+
+                const card = document.createElement('div');
+                card.className = `customer-card ${isOverdue ? 'overdue' : ''} ${c.archived ? 'archived' : ''}`;
+
+                let actionsHtml;
+                if (c.archived) {
+                    actionsHtml = `
+                        <div class="card-actions">
+                            <button class="action-btn btn-add-more" style="flex:1 1 100%;" onclick="addMoreDebt(${c.id})">${t.btnAddMore}</button>
+                        </div>`;
+                } else {
+                    actionsHtml = `
+                        <div class="card-actions">
+                            <button class="action-btn btn-sms" onclick="sendSMS('${c.phone}', '${c.name}', ${c.amount}, '${c.dateDue}')">${t.btnSms}</button>
+                            <button class="action-btn btn-tg" onclick="sendTG('${c.tgUsername}', '${c.phone}', '${c.name}', ${c.amount}, '${c.dateDue}')">${t.btnTg}</button>
+                            <button class="action-btn btn-partial" onclick="payPartial(${c.id})">${t.btnPartial}</button>
+                            <button class="action-btn btn-add-more" onclick="addMoreDebt(${c.id})">${t.btnAddMore}</button>
+                            <button class="action-btn btn-pay" onclick="payDebt(${c.id})" style="flex: 1 1 100%;">${t.btnPayFull}</button>
+                        </div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="card-header" onclick="openModal(${c.id})">
+                        <span class="card-title">👤 ${c.name}</span>
+                        <span class="card-amount ${c.archived ? 'paid-off' : ''}">${c.archived ? t.paidTag : c.amount.toLocaleString() + ' ' + t.sumUnit}</span>
+                    </div>
+                    <div class="card-details" onclick="openModal(${c.id})">
+                        📞 Tel: ${c.phone}<br>
+                        ${c.tgUsername ? `✈️ Telegram: @${c.tgUsername}<br>` : ''}
+                        📅 Olingan: ${c.dateGiven} | ⏳ To'lov: <b>${c.dateDue}</b> ${isOverdue ? '<b style="color:red">' + t.overdueLabel + '</b>' : ''}<br>
+                        📝 Izoh: ${c.note || '-'}<br>
+                        <small style="color: #2563eb; font-weight: bold;">${t.clickForDetails}</small>
+                    </div>
+                    ${actionsHtml}
+                `;
+                listContainer.appendChild(card);
+            });
+
+            document.getElementById('total-debt-sum').innerText = totalDebt.toLocaleString() + " " + t.sumUnit;
+        }
+
+        function openModal(id) {
+            const t = dictionary[currentLang];
+            const customer = customers.find(c => c.id === id);
+            if (!customer) return;
+
+            document.getElementById('modal-cust-name').innerText = customer.name;
+
+            let historyHtml = '';
+            if (customer.history && customer.history.length > 0) {
+                customer.history.forEach(h => {
+                    const isPayment = h.type.indexOf('To\'lov') !== -1 || h.type.indexOf('oplata') !== -1 || h.type.indexOf('Oplata') !== -1;
+                    historyHtml += `
+                        <div class="history-item ${isPayment ? 'minus' : 'plus'}">
+                            <div>
+                                <b>${h.date}</b> - ${h.type}<br>
+                                <small style="color:#64748b;">${h.item ? '📦 ' + h.item : ''}</small>
+                            </div>
+                            <div style="font-weight:bold;">
+                                ${isPayment ? '-' : '+'}${h.amount.toLocaleString()} ${t.sumUnit}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                historyHtml = `<p style="color:#64748b;">${t.noHistory}</p>`;
+            }
+
+            const bodyHtml = `
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    <p><b>📞 Telefon:</b> ${customer.phone}</p>
+                    <p><b>✈️ Telegram:</b> ${customer.tgUsername ? '@' + customer.tgUsername : '-'}</p>
+                    <p><b>💰 Jami qoldiq qarz:</b> <span style="color:${customer.archived ? '#10b981' : 'red'}; font-weight:bold;">${customer.archived ? t.paidTag : customer.amount.toLocaleString() + ' ' + t.sumUnit}</span></p>
+                    <p><b>📅 Qarz olingan sana:</b> ${customer.dateGiven}</p>
+                    <p><b>⏳ Qaytarish sanasi:</b> ${customer.dateDue}</p>
+                    <p><b>📝 Izoh:</b> ${customer.note || '-'}</p>
+                </div>
+                <h4 style="border-top:1px solid #e2e8f0; padding-top:10px;">📜 Kirim-Chiqim Tarixi:</h4>
+                <div class="history-list">
+                    ${historyHtml}
+                </div>
+            `;
+
+            document.getElementById('modal-cust-body').innerHTML = bodyHtml;
+            document.getElementById('customer-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('customer-modal').style.display = 'none';
+        }
+
+        function payPartial(id) {
+            const customer = customers.find(c => c.id === id);
+            if (!customer) return;
+
+            const promptText = customer.name + ' ' + L('promptPartialAmount').replace('{amount}', customer.amount.toLocaleString());
+            const paidAmount = prompt(promptText);
+            const paid = parseFloat(paidAmount);
+
+            if (paid && paid > 0 && paid <= customer.amount) {
+                customer.amount -= paid;
+                if (!customer.history) customer.history = [];
+
+                const today = new Date().toLocaleDateString();
+                customer.history.push({
+                    date: today,
+                    type: 'Qisman To\'lov',
+                    amount: paid,
+                    item: 'Naqd / Karta to\'lovi'
+                });
+
+                saveCustomersToStorage();
+                alert(L('alertPartialUpdated').replace('{amount}', customer.amount.toLocaleString()));
+                renderCustomers();
+            } else if (paid > customer.amount) {
+                alert(L('alertPartialExceed'));
+            }
+        }
+
+        function addMoreDebt(id) {
+            const customer = customers.find(c => c.id === id);
+            if (!customer) return;
+
+            const extraAmount = prompt(customer.name + ' ' + L('promptAddAmount'));
+            const added = parseFloat(extraAmount);
+
+            if (added && added > 0) {
+                const itemNote = prompt(L('promptAddItem'));
+
+                customer.amount += added;
+                customer.archived = false;
+                if (!customer.history) customer.history = [];
+
+                const today = new Date().toLocaleDateString();
+                customer.history.push({
+                    date: today,
+                    type: 'Qo\'shimcha qarz',
+                    amount: added,
+                    item: itemNote || L('itemNotSpecified')
+                });
+
+                saveCustomersToStorage();
+                alert(L('alertDebtAdded').replace('{amount}', customer.amount.toLocaleString()));
+                renderCustomers();
+            }
+        }
+
+        function payDebt(id) {
+            if (confirm(L('confirmPayFull'))) {
+                const customer = customers.find(c => c.id === id);
+                if (!customer) return;
+
+                if (!customer.history) customer.history = [];
+                const today = new Date().toLocaleDateString();
+                customer.history.push({
+                    date: today,
+                    type: 'To\'liq To\'lov',
+                    amount: customer.amount,
+                    item: 'Qarz to\'liq yopildi'
+                });
+
+                customer.amount = 0;
+                customer.archived = true;
+
+                saveCustomersToStorage();
+                alert(L('alertPayFullDone'));
+                renderCustomers();
+            }
+        }
+
+        function sendSMS(phone, name, amount, dateDue) {
+            const shopName = currentUser ? currentUser.shopName : "Do'konimiz";
+            const msg = `"${shopName}": Xurmatli ${name}, qarzingiz: ${amount.toLocaleString()} so'm. Muddati: ${dateDue}.`;
+            window.location.href = `sms:${phone}?body=${encodeURIComponent(msg)}`;
+        }
+
+        function sendTG(tgUsername, phone, name, amount, dateDue) {
+            const shopName = currentUser ? currentUser.shopName : "Do'konimiz";
+            const msg = `Assalomu alaykum ${name}. "${shopName}" do'konimizdan olingan ${amount.toLocaleString()} so'm qarzingizni qaytarish muddati: ${dateDue}.`;
+
+            copyToClipboard(msg);
+            alert(L('tgCopyAlert'));
+
+            if (tgUsername) {
+                window.open(`https://t.me/${tgUsername.replace('@', '')}`, '_blank');
+            } else {
+                // Username yo'q bo'lsa, Telegramning o'z ulashish oynasi ochiladi —
+                // foydalanuvchi kerakli chatni o'zi tanlaydi (WhatsApp'ga o'tkazib yubormaymiz).
+                window.open(`https://t.me/share/url?url=&text=${encodeURIComponent(msg)}`, '_blank');
+            }
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+        }
+        function fallbackCopy(text) {
+            let textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+        }
+
+        function copyCard() {
+            copyToClipboard(CARD_NUMBER);
+            alert(L('cardCopyAlert') + CARD_NUMBER);
+        }
+
+        function sendReceiptToBot() {
+            const shopName = currentUser ? currentUser.shopName : "";
+            const phone = currentUser ? currentUser.phone : "";
+            const receiptText = `To'lov cheki: ${shopName}, tel: ${phone}, sana: ${new Date().toLocaleDateString()}`;
+            copyToClipboard(receiptText);
+            alert(L('receiptCopyAlert'));
+
+            // Telegram start-param faqat harf/raqam/pastki chiziqni qabul qiladi (bo'shliq bo'lishi mumkin emas).
+            const safePhone = phone.replace(/[^0-9]/g, '');
+            const startParam = `pay_${safePhone}_${Date.now()}`;
+            window.open(`https://t.me/${BOT_USERNAME}?start=${startParam}`, '_blank');
+        }
+
+        async function activatePro() {
+            const inputCode = document.getElementById('promo-input').value.trim().toUpperCase();
+            const btn = document.getElementById('btn-activate-promo');
+
+            if (!inputCode) {
+                alert(L('codeFormatWrong'));
+                return;
+            }
+
+            if (!supabaseClient) {
+                alert(L('supabaseNotConfigured'));
+                return;
+            }
+
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = '...';
+
+            try {
+                const { data, error } = await supabaseClient.rpc('redeem_promo_code', { p_code: inputCode });
+
+                if (error) {
+                    console.error(error);
+                    alert(L('networkError'));
+                    return;
+                }
+
+                if (data === true) {
+                    const expireDate = new Date();
+                    expireDate.setDate(expireDate.getDate() + 30);
+                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
+                    localStorage.setItem('premium_expire_date_' + currentUser.phone, expireDate.toISOString());
+
+                    alert(L('codeActivated'));
+                    document.getElementById('promo-input').value = '';
+                    renderProStatus();
+                } else {
+                    alert(L('codeWrong'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert(L('networkError'));
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        function checkPremiumStatus() {
+            if (!currentUser) return;
+            const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
+            const expireDateStr = localStorage.getItem('premium_expire_date_' + currentUser.phone);
+            if (isPro && expireDateStr) {
+                if (new Date() > new Date(expireDateStr)) {
+                    localStorage.removeItem('is_premium_user_' + currentUser.phone);
+                    localStorage.removeItem('premium_expire_date_' + currentUser.phone);
+                    alert(L('premiumExpiredAlert'));
+                }
+            }
+        }
+
+        function renderProStatus() {
+            if (!currentUser) return;
+            const statusBox = document.getElementById('pro-status-box');
+            const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
+            const expireDateStr = localStorage.getItem('premium_expire_date_' + currentUser.phone);
+            if (isPro && expireDateStr) {
+                statusBox.innerHTML = `<div style="background:#dcfce7; padding:12px; border-radius:8px; margin-bottom:15px;"><span class="status-badge badge-pro">${L('badgeProActive')}</span><p style="font-size:13px;">${L('proExpireLabel')}<b>${new Date(expireDateStr).toLocaleDateString()}</b></p></div>`;
+            } else {
+                statusBox.innerHTML = `<div style="background:#f1f5f9; padding:12px; border-radius:8px; margin-bottom:15px;"><span class="status-badge badge-free">${L('badgeFree')}</span></div>`;
+            }
+        }
+
+        /* ---- Zaxira nusxa xavfsizligi ---- */
+        function updateLastBackupNote() {
+            if (!currentUser) return;
+            const note = document.getElementById('last-backup-note');
+            if (!note) return;
+            const lastBackup = localStorage.getItem('last_backup_' + currentUser.phone);
+            if (!lastBackup) {
+                note.innerText = L('lastBackupNever');
+            } else {
+                note.innerText = L('lastBackupOn') + new Date(parseInt(lastBackup)).toLocaleDateString();
+            }
+        }
+
+        function checkBackupReminder() {
+            if (!currentUser) return;
+            const banner = document.getElementById('backup-warning-banner');
+            const lastBackup = localStorage.getItem('last_backup_' + currentUser.phone);
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            const hasCustomers = customers.length > 0;
+
+            if (hasCustomers && (!lastBackup || (Date.now() - parseInt(lastBackup)) > sevenDays)) {
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customers));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `qarzlar_${currentUser ? currentUser.phone : 'backup'}_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+
+            if (currentUser) {
+                localStorage.setItem('last_backup_' + currentUser.phone, Date.now().toString());
+                updateLastBackupNote();
+                checkBackupReminder();
+            }
+        }
+
+        function importDataJSON(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const importedCust = JSON.parse(e.target.result);
+                    if (Array.isArray(importedCust)) {
+                        customers = importedCust;
+                        saveCustomersToStorage();
+                        alert(L('importSuccess'));
+                        renderCustomers();
+                        checkBackupReminder();
+                    }
+                } catch(err) { alert(L('importFail')); }
+            };
+            fileReader.readAsText(event.target.files[0]);
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Ismi,Telefon,Summa,Holati,Olingan Sana,Tolash Sana,Izoh\n";
+            customers.forEach(c => {
+                csvContent += `"${c.name}","${c.phone}",${c.amount},"${c.archived ? 'Tolangan' : 'Faol'}","${c.dateGiven}","${c.dateDue}","${c.note || ''}"\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `qarzlar_${currentUser ? currentUser.phone : 'excel'}_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */
+        function showHomeScreenHelp() {
+            const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+            document.getElementById('home-modal-body').innerText = isIos ? L('homeModalIos') : L('homeModalAndroid');
+            document.getElementById('home-screen-modal').style.display = 'flex';
+        }
+        function closeHomeScreenHelp() {
+            document.getElementById('home-screen-modal').style.display = 'none';
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(() => console.log('Service worker faol'))
+                    .catch((err) => console.log('Service worker xatolik:', err));
+            });
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
