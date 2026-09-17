@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>TemirDaftar — Admin</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f5f7fb}
+    *{box-sizing:border-box}body{margin:0}.wrap{max-width:1180px;margin:auto;padding:24px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.brand{font-size:24px;font-weight:800}.muted{color:#697386}
+    .card{background:#fff;border:1px solid #e5e9f2;border-radius:16px;padding:20px;box-shadow:0 5px 20px #1720330a}
+    #login{max-width:420px;margin:12vh auto}.input{width:100%;padding:13px 14px;border:1px solid #cfd6e3;border-radius:10px;font-size:16px;margin:12px 0}
+    button{border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#2563eb;color:#fff}.secondary{background:#eef2ff;color:#1d4ed8}.danger{background:#fee2e2;color:#b91c1c}
+    .error{color:#b91c1c;margin-top:10px;min-height:20px}.hidden{display:none!important}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.kpi{font-size:27px;font-weight:800;margin-top:8px}.label{font-size:13px;color:#697386}
+    .section{margin-top:20px}.section h2{font-size:18px;margin:0 0 14px}.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid #edf0f5}th{color:#697386;font-weight:700}
+    .bar{height:10px;background:#e8edf5;border-radius:10px;overflow:hidden}.bar i{display:block;height:100%;background:#2563eb}.row{display:flex;justify-content:space-between;gap:12px;margin:10px 0}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#1d4ed8;font-size:12px}
+    .status{margin-bottom:12px}.small{font-size:12px}.right{display:flex;gap:8px;align-items:center}
+    @media(max-width:850px){.grid{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}.wrap{padding:14px}.top{align-items:flex-start}}
+  </style>
+</head>
+<body>
+<div id="login" class="card">
+  <div class="brand">TemirDaftar Admin</div>
+  <p class="muted">Analitika va Premium nazorati</p>
+  <form id="loginForm">
+    <input id="password" class="input" type="password" placeholder="Admin parol" autocomplete="current-password" required>
+    <button class="primary" style="width:100%">Kirish</button>
+  </form>
+  <div id="loginError" class="error"></div>
+</div>
+
+<div id="app" class="wrap hidden">
+  <div class="top">
+    <div><div class="brand">TemirDaftar Admin</div><div class="muted small" id="updated">Yuklanmoqda...</div></div>
+    <div class="right"><button class="secondary" onclick="loadData()">↻ Yangilash</button><button class="danger" onclick="logout()">Chiqish</button></div>
+  </div>
+
+  <div id="status" class="status muted"></div>
+  <div class="grid">
+    <div class="card"><div class="label">Jami foydalanuvchilar</div><div class="kpi" id="users">—</div></div>
+    <div class="card"><div class="label">Bugun ro'yxatdan o'tgan</div><div class="kpi" id="newToday">—</div></div>
+    <div class="card"><div class="label">Faol foydalanuvchilar</div><div class="kpi" id="active">—</div></div>
+    <div class="card"><div class="label">Premium aktivatsiya</div><div class="kpi" id="premium">—</div></div>
+    <div class="card"><div class="label">Trial boshlaganlar</div><div class="kpi" id="trial">—</div></div>
+    <div class="card"><div class="label">Premium tushumi</div><div class="kpi" id="revenue">—</div></div>
+    <div class="card"><div class="label">Qo'shilgan mijozlar</div><div class="kpi" id="customers">—</div></div>
+    <div class="card"><div class="label">Kiritilgan qarzlar</div><div class="kpi" id="debts">—</div></div>
+  </div>
+
+  <div class="two section">
+    <div class="card"><h2>Marketing manbalari</h2><div id="sources"></div></div>
+    <div class="card"><h2>Kampaniyalar</h2><div id="campaigns"></div></div>
+  </div>
+
+  <div class="two section">
+    <div class="card"><h2>Eventlar</h2><div id="events"></div></div>
+    <div class="card"><h2>Promo kodlar</h2><div id="promos"></div></div>
+  </div>
+
+  <div class="card section"><h2>Oxirgi foydalanuvchilar</h2><div style="overflow:auto"><table><thead><tr><th>Telefon</th><th>Ism</th><th>Do'kon</th><th>Manba</th><th>Sana</th></tr></thead><tbody id="userTable"></tbody></table></div></div>
+</div>
+
+<script>
+const money=n=>new Intl.NumberFormat('uz-UZ').format(n||0)+' so\'m';
+const dateValue=r=>r.created_at||r.registered_at||r.createdAt||r.updated_at||r.last_seen_at||null;
+const dayKey=d=>{if(!d)return null;const x=new Date(d);return Number.isNaN(x.getTime())?null:x.toISOString().slice(0,10)};
+const today=new Date().toISOString().slice(0,10);
+const uniq=a=>[...new Set(a.filter(Boolean))];
+function countBy(rows,key){const m={};rows.forEach(r=>{const k=r[key]||'direct';m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function renderBars(el,items){el.innerHTML=items.length?items.slice(0,10).map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b>${v}</b></div><div class="bar"><i style="width:${Math.max(3,Math.round(v/items[0][1]*100))}%"></i></div>`).join(''):'<span class="muted">Ma\'lumot yo\'q</span>'}
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+async function login(e){e.preventDefault();const err=document.getElementById('loginError');err.textContent='';try{const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Kirish xatosi');document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');await loadData()}catch(x){err.textContent=x.message}}
+async function loadData(){const s=document.getElementById('status');s.textContent='Ma\'lumotlar yuklanmoqda...';try{const r=await fetch('/api/admin',{cache:'no-store'});if(r.status===401){document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');return}const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Xatolik');render(j.data);s.textContent='';document.getElementById('updated').textContent='Yangilandi: '+new Date().toLocaleString('uz-UZ')}catch(x){s.textContent=x.message}}
+async function logout(){await fetch('/api/admin/logout');location.reload()}
+function render(d){
+ const users=d.app_users||[], events=d.analytics_events||[], subs=d.subscriptions||[], promos=d.promo_codes||[];
+ const ev=(name)=>events.filter(x=>x.event_name===name);
+ document.getElementById('users').textContent=users.length;
+ document.getElementById('newToday').textContent=users.filter(x=>dayKey(x.created_at||x.registered_at)===today).length;
+ const activeCut=Date.now()-7*86400000;
+ document.getElementById('active').textContent=users.filter(x=>{const v=x.last_seen_at||x.updated_at||x.created_at;return v&&new Date(v).getTime()>=activeCut}).length;
+ const paid=ev('premium_activated');
+ document.getElementById('premium').textContent=paid.length;
+ document.getElementById('trial').textContent=ev('premium_trial_started').length;
+ document.getElementById('revenue').textContent=money(paid.reduce((s,x)=>s+Number(x.metadata?.price_uzs||25000),0));
+ document.getElementById('customers').textContent=ev('customer_added').length;
+ document.getElementById('debts').textContent=ev('debt_added').length;
+ renderBars(document.getElementById('sources'),countBy(users,'source'));
+ renderBars(document.getElementById('campaigns'),countBy(users,'campaign'));
+ renderBars(document.getElementById('events'),countBy(events,'event_name'));
+ const used=promos.filter(x=>x.used).length;document.getElementById('promos').innerHTML=`<div class="row"><span>Jami kodlar</span><b>${promos.length}</b></div><div class="row"><span>Ishlatilgan</span><b>${used}</b></div><div class="row"><span>Bo'sh</span><b>${promos.length-used}</b></div>`;
+ const rows=[...users].sort((a,b)=>new Date(dateValue(b)||0)-new Date(dateValue(a)||0)).slice(0,20);
+ document.getElementById('userTable').innerHTML=rows.map(x=>`<tr><td>${esc(x.phone||'—')}</td><td>${esc(x.name||'—')}</td><td>${esc(x.shop_name||x.shopName||'—')}</td><td><span class="pill">${esc(x.source||'direct')}</span></td><td>${esc(dateValue(x)?new Date(dateValue(x)).toLocaleString('uz-UZ'):'—')}</td></tr>`).join('');
+}
+document.getElementById('loginForm').addEventListener('submit',login);
+</script>
+</body>
+</html>
