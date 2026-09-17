@@ -1,10 +1,11 @@
-const CACHE_NAME = 'temirdaftar-v12';
+const CACHE_NAME = 'temirdaftar-v13';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/analytics.js',
+  '/admin-marketing.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-512-maskable.png',
@@ -31,6 +32,13 @@ function patchHtml(html) {
     html = html.replace(
       '</head>',
       '<script src="/analytics.js" defer></script>\n</head>'
+    );
+  }
+
+  if (html.includes('<title>TemirDaftar — Administrator</title>') && !html.includes('src="/admin-marketing.js"')) {
+    html = html.replace(
+      '</head>',
+      '<script src="/admin-marketing.js" defer></script>\n</head>'
     );
   }
 
