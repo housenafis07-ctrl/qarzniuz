@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>TemirDaftar — Admin</title>
+  <title>TemirDaftar — Administrator</title>
   <style>
     :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#172033;background:#f5f7fb}
     *{box-sizing:border-box}body{margin:0}.wrap{max-width:1180px;margin:auto;padding:24px}
@@ -23,7 +23,7 @@
 </head>
 <body>
 <div id="login" class="card">
-  <div class="brand">TemirDaftar Admin</div>
+  <div class="brand">TemirDaftar Administrator</div>
   <p class="muted">Analitika va Premium nazorati</p>
   <form id="loginForm">
     <input id="password" class="input" type="password" placeholder="Administrator paroli" autocomplete="current-password" required>
@@ -34,7 +34,7 @@
 
 <div id="app" class="wrap hidden">
   <div class="top">
-    <div><div class="brand">TemirDaftar Admin</div><div class="muted small" id="updated">Yuklanmoqda...</div></div>
+    <div><div class="brand">TemirDaftar Administrator</div><div class="muted small" id="updated">Yuklanmoqda...</div></div>
     <div class="right"><button class="secondary" onclick="loadData()">↻ Yangilash</button><button class="danger" onclick="logout()">Chiqish</button></div>
   </div>
 
@@ -68,7 +68,7 @@ const money=n=>new Intl.NumberFormat('uz-UZ').format(n||0)+' so\'m';
 const dateValue=r=>r.created_at||r.registered_at||r.createdAt||r.updated_at||r.last_seen_at||null;
 const dayKey=d=>{if(!d)return null;const x=new Date(d);return Number.isNaN(x.getTime())?null:x.toISOString().slice(0,10)};
 const today=new Date().toISOString().slice(0,10);
-const eventLabels={
+const EVENT_LABELS={
   app_open:'Ilova ochildi',
   app_first_open:'Ilk bor ochildi',
   session_started:'Sessiya boshlandi',
@@ -83,17 +83,19 @@ const eventLabels={
   debt_partial_payment_clicked:'Qisman to\'lov bosildi',
   debt_full_payment_clicked:'To\'liq to\'lov bosildi'
 };
-const sourceLabels={direct:'To\'g\'ridan-to\'g\'ri','chatgpt.com':'ChatGPT'};
-function displayEvent(v){return eventLabels[v]||v}
-function displaySource(v){return sourceLabels[v]||v}
-function countBy(rows,key){const m={};rows.forEach(r=>{const k=r[key]||'direct';m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
-function renderBars(el,items,formatter=v=>v){el.innerHTML=items.length?items.slice(0,10).map(([k,v])=>`<div class="row"><span>${esc(formatter(k))}</span><b>${v}</b></div><div class="bar"><i style="width:${Math.max(3,Math.round(v/items[0][1]*100))}%"></i></div>`).join(''):'<span class="muted">Ma\'lumot yo\'q</span>'}
+const SOURCE_LABELS={'direct':'To\'g\'ridan-to\'g\'ri','chatgpt.com':'ChatGPT'};
+const CAMPAIGN_LABELS={'direct':'Kampaniya ko\'rsatilmagan'};
+function displaySource(v){return SOURCE_LABELS[v]||v||'Noma\'lum';}
+function displayCampaign(v){return CAMPAIGN_LABELS[v]||v||'Kampaniya ko\'rsatilmagan';}
+function displayEvent(v){return EVENT_LABELS[v]||v||'Noma\'lum harakat';}
+function countBy(rows,key,display){const m={};rows.forEach(r=>{const raw=r[key];const k=display?display(raw):raw||'Noma\'lum';m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
+function renderBars(el,items){el.innerHTML=items.length?items.slice(0,10).map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b>${v}</b></div><div class="bar"><i style="width:${Math.max(3,Math.round(v/items[0][1]*100))}%"></i></div>`).join(''):'<span class="muted">Ma\'lumot yo\'q</span>'}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 async function login(e){e.preventDefault();const err=document.getElementById('loginError');err.textContent='';try{const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Kirish xatosi');document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');await loadData()}catch(x){err.textContent=x.message}}
 async function loadData(){const s=document.getElementById('status');s.textContent='Ma\'lumotlar yuklanmoqda...';try{const r=await fetch('/api/admin',{cache:'no-store'});if(r.status===401){document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');return}const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Xatolik');render(j.data);s.textContent='';document.getElementById('updated').textContent='Yangilandi: '+new Date().toLocaleString('uz-UZ')}catch(x){s.textContent=x.message}}
 async function logout(){await fetch('/api/admin/logout');location.reload()}
 function render(d){
- const users=d.app_users||[], events=d.analytics_events||[], subs=d.subscriptions||[], promos=d.promo_codes||[];
+ const users=d.app_users||[], events=d.analytics_events||[], promos=d.promo_codes||[];
  const ev=(name)=>events.filter(x=>x.event_name===name);
  document.getElementById('users').textContent=users.length;
  document.getElementById('newToday').textContent=users.filter(x=>dayKey(x.created_at||x.registered_at)===today).length;
@@ -105,12 +107,12 @@ function render(d){
  document.getElementById('revenue').textContent=money(paid.reduce((s,x)=>s+Number(x.metadata?.price_uzs||25000),0));
  document.getElementById('customers').textContent=ev('customer_added').length;
  document.getElementById('debts').textContent=ev('debt_added').length;
- renderBars(document.getElementById('sources'),countBy(users,'source'),displaySource);
- renderBars(document.getElementById('campaigns'),countBy(users,'campaign'),displaySource);
- renderBars(document.getElementById('events'),countBy(events,'event_name'),displayEvent);
+ renderBars(document.getElementById('sources'),countBy(users,'source',displaySource));
+ renderBars(document.getElementById('campaigns'),countBy(users,'campaign',displayCampaign));
+ renderBars(document.getElementById('events'),countBy(events,'event_name',displayEvent));
  const used=promos.filter(x=>x.used).length;document.getElementById('promos').innerHTML=`<div class="row"><span>Jami kodlar</span><b>${promos.length}</b></div><div class="row"><span>Ishlatilgan</span><b>${used}</b></div><div class="row"><span>Ishlatilmagan</span><b>${promos.length-used}</b></div>`;
  const rows=[...users].sort((a,b)=>new Date(dateValue(b)||0)-new Date(dateValue(a)||0)).slice(0,20);
- document.getElementById('userTable').innerHTML=rows.map(x=>`<tr><td>${esc(x.phone||'—')}</td><td>${esc(x.name||'—')}</td><td>${esc(x.shop_name||x.shopName||'—')}</td><td><span class="pill">${esc(displaySource(x.source||'direct'))}</span></td><td>${esc(dateValue(x)?new Date(dateValue(x)).toLocaleString('uz-UZ'):'—')}</td></tr>`).join('');
+ document.getElementById('userTable').innerHTML=rows.map(x=>`<tr><td>${esc(x.phone||'—')}</td><td>${esc(x.name||'—')}</td><td>${esc(x.shop_name||x.shopName||'—')}</td><td><span class="pill">${esc(displaySource(x.source))}</span></td><td>${esc(dateValue(x)?new Date(dateValue(x)).toLocaleString('uz-UZ'):'—')}</td></tr>`).join('');
 }
 document.getElementById('loginForm').addEventListener('submit',login);
 </script>
