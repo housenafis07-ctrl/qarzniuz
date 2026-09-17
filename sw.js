@@ -1,9 +1,10 @@
-const CACHE_NAME = 'temirdaftar-v11';
+const CACHE_NAME = 'temirdaftar-v12';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/analytics.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-512-maskable.png',
@@ -25,6 +26,13 @@ function patchHtml(html) {
     '<button id="install-btn" onclick="showHomeScreenHelp()" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px;">📱</button>',
     '<button id="install-btn" onclick="handleInstallButton()" aria-label="Ilovani yuklash" title="Ilovani yuklash" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px; cursor:pointer;">📱</button>'
   );
+
+  if (!html.includes('src="/analytics.js"')) {
+    html = html.replace(
+      '</head>',
+      '<script src="/analytics.js" defer></script>\n</head>'
+    );
+  }
 
   if (!html.includes('function handleInstallButton()')) {
     const marker = "        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */\n        function showHomeScreenHelp() {";
