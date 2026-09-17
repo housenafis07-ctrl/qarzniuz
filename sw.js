@@ -1,4 +1,4 @@
-const CACHE_NAME = 'temirdaftar-v13';
+const CACHE_NAME = 'temirdaftar-v14';
 
 const STATIC_ASSETS = [
   '/',
