@@ -1,11 +1,11 @@
-const CACHE_NAME = 'temirdaftar-v14';
+const CACHE_NAME = 'temirdaftar-v15';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/analytics.js',
-  '/admin-marketing.js',
+  '/admin-marketing.js?v=20260917-2',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/icon-512-maskable.png',
@@ -29,17 +29,11 @@ function patchHtml(html) {
   );
 
   if (!html.includes('src="/analytics.js"')) {
-    html = html.replace(
-      '</head>',
-      '<script src="/analytics.js" defer></script>\n</head>'
-    );
+    html = html.replace('</head>', '<script src="/analytics.js" defer></script>\n</head>');
   }
 
-  if (html.includes('<title>TemirDaftar — Administrator</title>') && !html.includes('src="/admin-marketing.js"')) {
-    html = html.replace(
-      '</head>',
-      '<script src="/admin-marketing.js" defer></script>\n</head>'
-    );
+  if (html.includes('<title>TemirDaftar — Administrator</title>') && !html.includes('admin-marketing.js?v=20260917-2')) {
+    html = html.replace('</head>', '<script src="/admin-marketing.js?v=20260917-2" defer></script>\n</head>');
   }
 
   if (!html.includes('function handleInstallButton()')) {
@@ -67,21 +61,16 @@ function patchHtml(html) {
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then((cacheNames) => Promise.all(
+      cacheNames.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))
+    ))
   );
   self.clients.claim();
 });
@@ -121,7 +110,5 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => cachedResponse || fetch(request))
-  );
+  event.respondWith(caches.match(request).then((cachedResponse) => cachedResponse || fetch(request)));
 });
