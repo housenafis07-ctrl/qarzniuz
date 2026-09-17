@@ -26,7 +26,7 @@
   <div class="brand">TemirDaftar Admin</div>
   <p class="muted">Analitika va Premium nazorati</p>
   <form id="loginForm">
-    <input id="password" class="input" type="password" placeholder="Admin parol" autocomplete="current-password" required>
+    <input id="password" class="input" type="password" placeholder="Administrator paroli" autocomplete="current-password" required>
     <button class="primary" style="width:100%">Kirish</button>
   </form>
   <div id="loginError" class="error"></div>
@@ -41,10 +41,10 @@
   <div id="status" class="status muted"></div>
   <div class="grid">
     <div class="card"><div class="label">Jami foydalanuvchilar</div><div class="kpi" id="users">—</div></div>
-    <div class="card"><div class="label">Bugun ro'yxatdan o'tgan</div><div class="kpi" id="newToday">—</div></div>
+    <div class="card"><div class="label">Bugun ro'yxatdan o'tganlar</div><div class="kpi" id="newToday">—</div></div>
     <div class="card"><div class="label">Faol foydalanuvchilar</div><div class="kpi" id="active">—</div></div>
-    <div class="card"><div class="label">Premium aktivatsiya</div><div class="kpi" id="premium">—</div></div>
-    <div class="card"><div class="label">Trial boshlaganlar</div><div class="kpi" id="trial">—</div></div>
+    <div class="card"><div class="label">Premium faollashtirishlar</div><div class="kpi" id="premium">—</div></div>
+    <div class="card"><div class="label">Sinov muddati boshlaganlar</div><div class="kpi" id="trial">—</div></div>
     <div class="card"><div class="label">Premium tushumi</div><div class="kpi" id="revenue">—</div></div>
     <div class="card"><div class="label">Qo'shilgan mijozlar</div><div class="kpi" id="customers">—</div></div>
     <div class="card"><div class="label">Kiritilgan qarzlar</div><div class="kpi" id="debts">—</div></div>
@@ -52,15 +52,15 @@
 
   <div class="two section">
     <div class="card"><h2>Marketing manbalari</h2><div id="sources"></div></div>
-    <div class="card"><h2>Kampaniyalar</h2><div id="campaigns"></div></div>
+    <div class="card"><h2>Reklama kampaniyalari</h2><div id="campaigns"></div></div>
   </div>
 
   <div class="two section">
-    <div class="card"><h2>Eventlar</h2><div id="events"></div></div>
+    <div class="card"><h2>Foydalanuvchi harakatlari</h2><div id="events"></div></div>
     <div class="card"><h2>Promo kodlar</h2><div id="promos"></div></div>
   </div>
 
-  <div class="card section"><h2>Oxirgi foydalanuvchilar</h2><div style="overflow:auto"><table><thead><tr><th>Telefon</th><th>Ism</th><th>Do'kon</th><th>Manba</th><th>Sana</th></tr></thead><tbody id="userTable"></tbody></table></div></div>
+  <div class="card section"><h2>So'nggi foydalanuvchilar</h2><div style="overflow:auto"><table><thead><tr><th>Telefon</th><th>Ism</th><th>Do'kon</th><th>Manba</th><th>Sana</th></tr></thead><tbody id="userTable"></tbody></table></div></div>
 </div>
 
 <script>
@@ -68,9 +68,26 @@ const money=n=>new Intl.NumberFormat('uz-UZ').format(n||0)+' so\'m';
 const dateValue=r=>r.created_at||r.registered_at||r.createdAt||r.updated_at||r.last_seen_at||null;
 const dayKey=d=>{if(!d)return null;const x=new Date(d);return Number.isNaN(x.getTime())?null:x.toISOString().slice(0,10)};
 const today=new Date().toISOString().slice(0,10);
-const uniq=a=>[...new Set(a.filter(Boolean))];
+const eventLabels={
+  app_open:'Ilova ochildi',
+  app_first_open:'Ilk bor ochildi',
+  session_started:'Sessiya boshlandi',
+  analytics_test:'Analitika testi',
+  user_login:'Foydalanuvchi tizimga kirdi',
+  user_registered:'Yangi foydalanuvchi ro\'yxatdan o\'tdi',
+  premium_trial_started:'Sinov Premium boshlandi',
+  premium_activated:'Premium faollashtirildi',
+  premium_payment_started:'Premium to\'lovi boshlandi',
+  customer_added:'Mijoz qo\'shildi',
+  debt_added:'Qarz qo\'shildi',
+  debt_partial_payment_clicked:'Qisman to\'lov bosildi',
+  debt_full_payment_clicked:'To\'liq to\'lov bosildi'
+};
+const sourceLabels={direct:'To\'g\'ridan-to\'g\'ri','chatgpt.com':'ChatGPT'};
+function displayEvent(v){return eventLabels[v]||v}
+function displaySource(v){return sourceLabels[v]||v}
 function countBy(rows,key){const m={};rows.forEach(r=>{const k=r[key]||'direct';m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}
-function renderBars(el,items){el.innerHTML=items.length?items.slice(0,10).map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b>${v}</b></div><div class="bar"><i style="width:${Math.max(3,Math.round(v/items[0][1]*100))}%"></i></div>`).join(''):'<span class="muted">Ma\'lumot yo\'q</span>'}
+function renderBars(el,items,formatter=v=>v){el.innerHTML=items.length?items.slice(0,10).map(([k,v])=>`<div class="row"><span>${esc(formatter(k))}</span><b>${v}</b></div><div class="bar"><i style="width:${Math.max(3,Math.round(v/items[0][1]*100))}%"></i></div>`).join(''):'<span class="muted">Ma\'lumot yo\'q</span>'}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 async function login(e){e.preventDefault();const err=document.getElementById('loginError');err.textContent='';try{const r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Kirish xatosi');document.getElementById('login').classList.add('hidden');document.getElementById('app').classList.remove('hidden');await loadData()}catch(x){err.textContent=x.message}}
 async function loadData(){const s=document.getElementById('status');s.textContent='Ma\'lumotlar yuklanmoqda...';try{const r=await fetch('/api/admin',{cache:'no-store'});if(r.status===401){document.getElementById('app').classList.add('hidden');document.getElementById('login').classList.remove('hidden');return}const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Xatolik');render(j.data);s.textContent='';document.getElementById('updated').textContent='Yangilandi: '+new Date().toLocaleString('uz-UZ')}catch(x){s.textContent=x.message}}
@@ -88,12 +105,12 @@ function render(d){
  document.getElementById('revenue').textContent=money(paid.reduce((s,x)=>s+Number(x.metadata?.price_uzs||25000),0));
  document.getElementById('customers').textContent=ev('customer_added').length;
  document.getElementById('debts').textContent=ev('debt_added').length;
- renderBars(document.getElementById('sources'),countBy(users,'source'));
- renderBars(document.getElementById('campaigns'),countBy(users,'campaign'));
- renderBars(document.getElementById('events'),countBy(events,'event_name'));
- const used=promos.filter(x=>x.used).length;document.getElementById('promos').innerHTML=`<div class="row"><span>Jami kodlar</span><b>${promos.length}</b></div><div class="row"><span>Ishlatilgan</span><b>${used}</b></div><div class="row"><span>Bo'sh</span><b>${promos.length-used}</b></div>`;
+ renderBars(document.getElementById('sources'),countBy(users,'source'),displaySource);
+ renderBars(document.getElementById('campaigns'),countBy(users,'campaign'),displaySource);
+ renderBars(document.getElementById('events'),countBy(events,'event_name'),displayEvent);
+ const used=promos.filter(x=>x.used).length;document.getElementById('promos').innerHTML=`<div class="row"><span>Jami kodlar</span><b>${promos.length}</b></div><div class="row"><span>Ishlatilgan</span><b>${used}</b></div><div class="row"><span>Ishlatilmagan</span><b>${promos.length-used}</b></div>`;
  const rows=[...users].sort((a,b)=>new Date(dateValue(b)||0)-new Date(dateValue(a)||0)).slice(0,20);
- document.getElementById('userTable').innerHTML=rows.map(x=>`<tr><td>${esc(x.phone||'—')}</td><td>${esc(x.name||'—')}</td><td>${esc(x.shop_name||x.shopName||'—')}</td><td><span class="pill">${esc(x.source||'direct')}</span></td><td>${esc(dateValue(x)?new Date(dateValue(x)).toLocaleString('uz-UZ'):'—')}</td></tr>`).join('');
+ document.getElementById('userTable').innerHTML=rows.map(x=>`<tr><td>${esc(x.phone||'—')}</td><td>${esc(x.name||'—')}</td><td>${esc(x.shop_name||x.shopName||'—')}</td><td><span class="pill">${esc(displaySource(x.source||'direct'))}</span></td><td>${esc(dateValue(x)?new Date(dateValue(x)).toLocaleString('uz-UZ'):'—')}</td></tr>`).join('');
 }
 document.getElementById('loginForm').addEventListener('submit',login);
 </script>
