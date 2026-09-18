@@ -1199,3 +1199,143 @@
 
                 if (data === true) {
                     const expireDate = new Date();
+                    expireDate.setDate(expireDate.getDate() + 30);
+                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
+                    localStorage.setItem('premium_expire_date_' + currentUser.phone, expireDate.toISOString());
+
+                    alert(L('codeActivated'));
+                    document.getElementById('promo-input').value = '';
+                    renderProStatus();
+                } else {
+                    alert(L('codeWrong'));
+                }
+            } catch (e) {
+                console.error(e);
+                alert(L('networkError'));
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+
+        function checkPremiumStatus() {
+            if (!currentUser) return;
+            const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
+            const expireDateStr = localStorage.getItem('premium_expire_date_' + currentUser.phone);
+            if (isPro && expireDateStr) {
+                if (new Date() > new Date(expireDateStr)) {
+                    localStorage.removeItem('is_premium_user_' + currentUser.phone);
+                    localStorage.removeItem('premium_expire_date_' + currentUser.phone);
+                    alert(L('premiumExpiredAlert'));
+                }
+            }
+        }
+
+        function renderProStatus() {
+            if (!currentUser) return;
+            const statusBox = document.getElementById('pro-status-box');
+            const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
+            const expireDateStr = localStorage.getItem('premium_expire_date_' + currentUser.phone);
+            if (isPro && expireDateStr) {
+                statusBox.innerHTML = `<div style="background:#dcfce7; padding:12px; border-radius:8px; margin-bottom:15px;"><span class="status-badge badge-pro">${L('badgeProActive')}</span><p style="font-size:13px;">${L('proExpireLabel')}<b>${new Date(expireDateStr).toLocaleDateString()}</b></p></div>`;
+            } else {
+                statusBox.innerHTML = `<div style="background:#f1f5f9; padding:12px; border-radius:8px; margin-bottom:15px;"><span class="status-badge badge-free">${L('badgeFree')}</span></div>`;
+            }
+        }
+
+        /* ---- Zaxira nusxa xavfsizligi ---- */
+        function updateLastBackupNote() {
+            if (!currentUser) return;
+            const note = document.getElementById('last-backup-note');
+            if (!note) return;
+            const lastBackup = localStorage.getItem('last_backup_' + currentUser.phone);
+            if (!lastBackup) {
+                note.innerText = L('lastBackupNever');
+            } else {
+                note.innerText = L('lastBackupOn') + new Date(parseInt(lastBackup)).toLocaleDateString();
+            }
+        }
+
+        function checkBackupReminder() {
+            if (!currentUser) return;
+            const banner = document.getElementById('backup-warning-banner');
+            const lastBackup = localStorage.getItem('last_backup_' + currentUser.phone);
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            const hasCustomers = customers.length > 0;
+
+            if (hasCustomers && (!lastBackup || (Date.now() - parseInt(lastBackup)) > sevenDays)) {
+                banner.style.display = 'block';
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customers));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `qarzlar_${currentUser ? currentUser.phone : 'backup'}_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+
+            if (currentUser) {
+                localStorage.setItem('last_backup_' + currentUser.phone, Date.now().toString());
+                updateLastBackupNote();
+                checkBackupReminder();
+            }
+        }
+
+        function importDataJSON(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const importedCust = JSON.parse(e.target.result);
+                    if (Array.isArray(importedCust)) {
+                        customers = importedCust;
+                        saveCustomersToStorage();
+                        alert(L('importSuccess'));
+                        renderCustomers();
+                        checkBackupReminder();
+                    }
+                } catch(err) { alert(L('importFail')); }
+            };
+            fileReader.readAsText(event.target.files[0]);
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,Ismi,Telefon,Summa,Holati,Olingan Sana,Tolash Sana,Izoh\n";
+            customers.forEach(c => {
+                csvContent += `"${c.name}","${c.phone}",${c.amount},"${c.archived ? 'Tolangan' : 'Faol'}","${c.dateGiven}","${c.dateDue}","${c.note || ''}"\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `qarzlar_${currentUser ? currentUser.phone : 'excel'}_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */
+        function showHomeScreenHelp() {
+            const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+            document.getElementById('home-modal-body').innerText = isIos ? L('homeModalIos') : L('homeModalAndroid');
+            document.getElementById('home-screen-modal').style.display = 'flex';
+        }
+        function closeHomeScreenHelp() {
+            document.getElementById('home-screen-modal').style.display = 'none';
+        }
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(() => console.log('Service worker faol'))
+                    .catch((err) => console.log('Service worker xatolik:', err));
+            });
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
