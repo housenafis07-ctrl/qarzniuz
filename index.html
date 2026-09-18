@@ -566,6 +566,105 @@
             }
         };
 
+        // Русская локализация: используем кириллицу во всём интерфейсе.
+        Object.assign(dictionary.ru, {
+            authLoginTitle: "Вход в систему",
+            authRegTitle: "Создание профиля",
+            authLoginSub: "Введите ваш номер телефона",
+            authRegSub: "Введите данные магазина",
+            authWarning: "⚠️ Ваши данные хранятся только на этом телефоне/в этом браузере. Если история браузера будет очищена или устройство будет заменено, данные без резервной копии не восстановятся. Регулярно делайте резервную копию — в разделе Premium.",
+            btnLoginMode: "Вход",
+            btnRegMode: "Регистрация",
+            lblPhone: "Номер телефона",
+            lblName: "Ваше имя",
+            lblShop: "Название магазина",
+            btnLogout: "🚪 Выход",
+            totalDebt: "ОБЩАЯ ЗАДОЛЖЕННОСТЬ",
+            searchPlaceholder: "🔍 Поиск...",
+            optAll: "Все",
+            optOverdue: "⏰ Просроченные",
+            optAmount: "💰 Самые большие долги",
+            optPaid: "✅ Оплаченные (архив)",
+            tabList: "Список",
+            tabPro: "Premium",
+            titleAddDebt: "Записать новый долг",
+            lblCustName: "Имя клиента",
+            lblCustPhone: "Номер телефона",
+            lblCustTg: "Telegram Username (необязательно)",
+            lblCustAmount: "Сумма долга (сум)",
+            lblDateGiven: "Дата получения долга",
+            lblDateDue: "Срок оплаты",
+            lblCustNote: "Примечание / Товары",
+            btnSaveDebt: "Сохранить",
+            titleProHeading: "👑 Переход на Premium (30 дней)",
+            titlePromoInput: "🔑 Введите код активации",
+            btnActivatePromo: "Активировать",
+            titleUzcardPay: "Оплата через Uzcard",
+            lblMonthlyPrice: "Стоимость подписки: <b>25 000 сум/мес.</b>",
+            btnCopyCard: "Скопировать номер карты 📋",
+            btnSendBot: "Отправить чек в Telegram-бот ✈️",
+            payHonestyNote: "После оплаты владелец проверит платёж и лично отправит вам код активации. Пока этот процесс подтверждается вручную.",
+            titleToolsHeading: "💾 Резервное копирование и Excel",
+            lblToolsSub: "Сохраните долги в файл или выгрузите в Excel.",
+            btnExportJson: "📁 Сохранить резервную копию (JSON)",
+            btnExportCsv: "📊 Выгрузить в Excel (CSV)",
+            btnImportJson: "📥 Восстановить резервную копию (JSON)",
+            btnSms: "💬 SMS",
+            btnTg: "✈️ Telegram",
+            btnPartial: "💰 Частичная оплата",
+            btnAddMore: "➕ Добавить долг",
+            btnPayFull: "✅ Закрыть полностью",
+            clickForDetails: "👆 Нажмите на имя для подробностей",
+            sumUnit: "сум",
+            overdueLabel: "(Просрочено)",
+            paidTag: "✅ Оплачено",
+            noHistory: "История отсутствует.",
+            lastBackupNever: "Вы ещё не делали резервную копию.",
+            lastBackupOn: "Последняя копия: ",
+            backupWarningText: "⚠️ Вы давно не делали резервную копию. Данные хранятся только на этом устройстве.",
+            backupWarningBtn: "Создать копию сейчас",
+            alertTrialGiven: "🎁 Вам предоставлена бесплатная 3-дневная Premium-подписка!",
+            alertPhoneRequired: "Пожалуйста, введите номер телефона!",
+            alertLoginNotFound: "❌ Профиль с таким номером не найден!\n\nСначала нажмите «Регистрация».",
+            alertAlreadyRegistered: "⚠️ Этот номер уже зарегистрирован! Войдите через «Вход».",
+            alertRegisterSuccess: "🎉 Вы успешно зарегистрированы!",
+            confirmLogout: "Вы действительно хотите выйти?",
+            alertLimitReached: "⚠️ На бесплатном тарифе можно добавить не более 5 должников!\n\nАктивируйте Premium.",
+            alertDebtSaved: "Долг сохранён!",
+            promptPartialAmount: "сколько оплатил? (Общий долг: {amount} сум)",
+            alertPartialUpdated: "Долг обновлён! Остаток: {amount} сум",
+            alertPartialExceed: "❌ Введённая сумма больше общего долга!",
+            promptAddAmount: "какую сумму долга добавить?",
+            promptAddItem: "Какие товары взял? (Например: 2 масла, 1 мешок муки)",
+            itemNotSpecified: "Название товара не указано",
+            alertDebtAdded: "Долг добавлен! Общий долг: {amount} сум",
+            confirmPayFull: "Долг полностью оплачен? Запись будет перенесена в архив «Оплаченные» (не удаляется).",
+            alertPayFullDone: "✅ Полностью оплачено и перенесено в архив.",
+            tgCopyAlert: "📋 Текст напоминания скопирован!\n\nПосле открытия чата вставьте текст (Paste).",
+            cardCopyAlert: "Номер карты скопирован: ",
+            receiptCopyAlert: "📋 Данные чека скопированы! После открытия чата с ботом вставьте и отправьте текст.",
+            codeFormatWrong: "❌ Неверный код! Код не должен быть пустым и должен быть в формате, выданном администратором.",
+            codeUsed: "❌ Этот код уже использован!",
+            codeWrong: "❌ Неверный или уже использованный код. Возможно, код не был выдан администратором.",
+            supabaseNotConfigured: "⚠️ Система проверки кода ещё не настроена. Обратитесь к администратору.",
+            networkError: "⚠️ Ошибка подключения к интернету. Проверьте сеть и попробуйте снова.",
+            codeActivated: "🎉 Premium активирован на 30 дней!",
+            premiumExpiredAlert: "⚠️ Срок действия вашей Premium-подписки истёк.",
+            importSuccess: "✅ Данные восстановлены!",
+            importFail: "❌ Неверный JSON-файл!",
+            badgeProActive: "PRO АКТИВЕН",
+            badgeFree: "БЕСПЛАТНЫЙ ТАРИФ (макс. 5 должников)",
+            proExpireLabel: "Действителен до: ",
+            homeModalTitle: "Добавить на главный экран",
+            homeModalAndroid: "Android (Chrome): откройте меню браузера (⋮) и выберите «Добавить на главный экран».",
+            homeModalIos: "iPhone (Safari): нажмите кнопку «Поделиться» (Share) внизу, затем выберите «На экран Домой» (Add to Home Screen).",
+            phoneLabel: "Телефон",
+            dateGivenLabel: "Дата получения",
+            dateDueLabel: "Срок оплаты",
+            noteLabel: "Примечание",
+            totalDebtLabel: "Общий остаток долга"
+        });
+
         function L(key) {
             return (dictionary[currentLang] && dictionary[currentLang][key]) || key;
         }
@@ -860,10 +959,10 @@
                         <span class="card-amount ${c.archived ? 'paid-off' : ''}">${c.archived ? t.paidTag : c.amount.toLocaleString() + ' ' + t.sumUnit}</span>
                     </div>
                     <div class="card-details" onclick="openModal(${c.id})">
-                        📞 Tel: ${c.phone}<br>
-                        ${c.tgUsername ? `✈️ Telegram: @${c.tgUsername}<br>` : ''}
-                        📅 Olingan: ${c.dateGiven} | ⏳ To'lov: <b>${c.dateDue}</b> ${isOverdue ? '<b style="color:red">' + t.overdueLabel + '</b>' : ''}<br>
-                        📝 Izoh: ${c.note || '-'}<br>
+                        📞 <b>${t.phoneLabel}</b>: ${c.phone}<br>
+                        ${c.tgUsername ? `✈️ <b>Telegram</b>: @${c.tgUsername}<br>` : ''}
+                        📅 <b>${t.dateGivenLabel}</b>: ${c.dateGiven} | ⏳ <b>${t.dateDueLabel}</b>: <b>${c.dateDue}</b> ${isOverdue ? '<b style="color:red">' + t.overdueLabel + '</b>' : ''}<br>
+                        📝 <b>${t.noteLabel}</b>: ${c.note || '-'}<br>
                         <small style="color: #2563eb; font-weight: bold;">${t.clickForDetails}</small>
                     </div>
                     ${actionsHtml}
@@ -872,6 +971,17 @@
             });
 
             document.getElementById('total-debt-sum').innerText = totalDebt.toLocaleString() + " " + t.sumUnit;
+        }
+
+        function translateHistoryType(type) {
+            if (currentLang !== 'ru') return type;
+            const map = {
+                "Dastlabki qarz": "Первоначальный долг",
+                "Qisman To'lov": "Частичная оплата",
+                "To'liq To'lov": "Полная оплата",
+                "Qo'shimcha qarz": "Дополнительный долг"
+            };
+            return map[type] || type;
         }
 
         function openModal(id) {
@@ -888,7 +998,7 @@
                     historyHtml += `
                         <div class="history-item ${isPayment ? 'minus' : 'plus'}">
                             <div>
-                                <b>${h.date}</b> - ${h.type}<br>
+                                <b>${h.date}</b> - ${translateHistoryType(h.type)}<br>
                                 <small style="color:#64748b;">${h.item ? '📦 ' + h.item : ''}</small>
                             </div>
                             <div style="font-weight:bold;">
@@ -903,12 +1013,12 @@
 
             const bodyHtml = `
                 <div style="font-size: 14px; margin-bottom: 15px;">
-                    <p><b>📞 Telefon:</b> ${customer.phone}</p>
+                    <p><b>📞 ${t.phoneLabel}:</b> ${customer.phone}</p>
                     <p><b>✈️ Telegram:</b> ${customer.tgUsername ? '@' + customer.tgUsername : '-'}</p>
-                    <p><b>💰 Jami qoldiq qarz:</b> <span style="color:${customer.archived ? '#10b981' : 'red'}; font-weight:bold;">${customer.archived ? t.paidTag : customer.amount.toLocaleString() + ' ' + t.sumUnit}</span></p>
-                    <p><b>📅 Qarz olingan sana:</b> ${customer.dateGiven}</p>
-                    <p><b>⏳ Qaytarish sanasi:</b> ${customer.dateDue}</p>
-                    <p><b>📝 Izoh:</b> ${customer.note || '-'}</p>
+                    <p><b>💰 ${t.totalDebtLabel}:</b> <span style="color:${customer.archived ? '#10b981' : 'red'}; font-weight:bold;">${customer.archived ? t.paidTag : customer.amount.toLocaleString() + ' ' + t.sumUnit}</span></p>
+                    <p><b>📅 ${t.dateGivenLabel}:</b> ${customer.dateGiven}</p>
+                    <p><b>⏳ ${t.dateDueLabel}:</b> ${customer.dateDue}</p>
+                    <p><b>📝 ${t.noteLabel}:</b> ${customer.note || '-'}</p>
                 </div>
                 <h4 style="border-top:1px solid #e2e8f0; padding-top:10px;">📜 Kirim-Chiqim Tarixi:</h4>
                 <div class="history-list">
@@ -1198,33 +1308,3 @@
                 csvContent += `"${c.name}","${c.phone}",${c.amount},"${c.archived ? 'Tolangan' : 'Faol'}","${c.dateGiven}","${c.dateDue}","${c.note || ''}"\n`;
             });
             const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `qarzlar_${currentUser ? currentUser.phone : 'excel'}_${new Date().toISOString().split('T')[0]}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        }
-
-        /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */
-        function showHomeScreenHelp() {
-            const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-            document.getElementById('home-modal-body').innerText = isIos ? L('homeModalIos') : L('homeModalAndroid');
-            document.getElementById('home-screen-modal').style.display = 'flex';
-        }
-        function closeHomeScreenHelp() {
-            document.getElementById('home-screen-modal').style.display = 'none';
-        }
-
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(() => console.log('Service worker faol'))
-                    .catch((err) => console.log('Service worker xatolik:', err));
-            });
-        }
-
-        initApp();
-    </script>
-</body>
-</html>
