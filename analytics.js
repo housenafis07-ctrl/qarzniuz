@@ -11,6 +11,7 @@
   const CAMPAIGN_KEY = 'td_analytics_campaign';
   const SESSION_KEY = 'td_analytics_session';
   const APP_OPEN_KEY = 'td_analytics_app_opened';
+  const INSTALL_DISMISSED_KEY = 'td_install_banner_dismissed_until';
 
   function getClient() {
     try {
@@ -111,6 +112,129 @@
     track: track,
     registerUser: registerUser
   };
+
+  function setupInstallBanner() {
+    try {
+      // Never show the browser banner when the site is already running as an app.
+      const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      const iosStandalone = window.navigator.standalone === true;
+      if (standalone || iosStandalone) return;
+
+      const dismissedUntil = Number(localStorage.getItem(INSTALL_DISMISSED_KEY) || 0);
+      if (dismissedUntil > Date.now()) return;
+
+      const style = document.createElement('style');
+      style.textContent = `
+        #td-install-banner {
+          position: fixed;
+          left: 12px;
+          right: 12px;
+          bottom: 82px;
+          z-index: 5000;
+          display: none;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 12px 12px 14px;
+          background: rgba(255,255,255,.98);
+          border: 1px solid #dbeafe;
+          border-radius: 14px;
+          box-shadow: 0 8px 28px rgba(15,23,42,.18);
+          animation: tdInstallSlide .28s ease-out;
+        }
+        #td-install-banner .td-install-icon {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          border-radius: 10px;
+          object-fit: cover;
+        }
+        #td-install-banner .td-install-copy { min-width: 0; flex: 1; }
+        #td-install-banner .td-install-title {
+          font-size: 14px;
+          font-weight: 800;
+          color: #1e293b;
+          margin-bottom: 2px;
+        }
+        #td-install-banner .td-install-text {
+          font-size: 11.5px;
+          line-height: 1.35;
+          color: #64748b;
+        }
+        #td-install-banner .td-install-action {
+          border: 0;
+          border-radius: 9px;
+          padding: 9px 11px;
+          background: #2563eb;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 800;
+          white-space: nowrap;
+          cursor: pointer;
+        }
+        #td-install-banner .td-install-close {
+          position: absolute;
+          top: -8px;
+          right: -5px;
+          width: 24px;
+          height: 24px;
+          border: 1px solid #e2e8f0;
+          border-radius: 50%;
+          background: #fff;
+          color: #64748b;
+          font-size: 15px;
+          line-height: 20px;
+          cursor: pointer;
+        }
+        @keyframes tdInstallSlide {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (min-width: 700px) {
+          #td-install-banner { max-width: 520px; left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); }
+        }
+      `;
+      document.head.appendChild(style);
+
+      const banner = document.createElement('div');
+      banner.id = 'td-install-banner';
+      banner.innerHTML = `
+        <img class="td-install-icon" src="/icons/icon-192.png" alt="QarzniUz">
+        <div class="td-install-copy">
+          <div class="td-install-title" id="td-install-title">📱 QarzniUz ilovasini o‘rnating</div>
+          <div class="td-install-text" id="td-install-text">Telefoningizda tezroq va qulayroq foydalaning.</div>
+        </div>
+        <button class="td-install-action" id="td-install-action" type="button">O‘RNATISH</button>
+        <button class="td-install-close" id="td-install-close" type="button" aria-label="Yopish">×</button>
+      `;
+      document.body.appendChild(banner);
+
+      const lang = localStorage.getItem('app_lang') || 'uz';
+      if (lang === 'ru') {
+        document.getElementById('td-install-title').textContent = '📱 Установите приложение QarzniUz';
+        document.getElementById('td-install-text').textContent = 'Пользуйтесь приложением быстрее и удобнее.';
+        document.getElementById('td-install-action').textContent = 'УСТАНОВИТЬ';
+      }
+
+      const show = () => {
+        if (document.visibilityState === 'visible') banner.style.display = 'flex';
+      };
+
+      document.getElementById('td-install-close').addEventListener('click', function () {
+        banner.style.display = 'none';
+        localStorage.setItem(INSTALL_DISMISSED_KEY, String(Date.now() + 7 * 24 * 60 * 60 * 1000));
+      });
+
+      document.getElementById('td-install-action').addEventListener('click', function () {
+        track('app_install_clicked', { method: 'apk_download' });
+        window.location.href = '/QarzniUz.apk';
+      });
+
+      // Give the page a moment to load before showing the banner.
+      setTimeout(show, 2500);
+    } catch (error) {
+      console.warn('TemirDaftar install banner setup failed:', error);
+    }
+  }
 
   function setupFormTracking() {
     const form = document.getElementById('auth-form');
@@ -221,6 +345,7 @@
   function boot() {
     captureCampaign();
     setupStorageTracking();
+    setupInstallBanner();
     setupFormTracking();
     setupCustomerTracking();
     setupClickTracking();
