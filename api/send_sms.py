@@ -17,7 +17,6 @@ SEND_SMS_HOOK_SECRET = os.environ.get("SEND_SMS_HOOK_SECRET", "")
 ESKIZ_LOGIN_URL = "https://notify.eskiz.uz/api/auth/login"
 ESKIZ_SEND_URL = "https://notify.eskiz.uz/api/message/sms/send"
 
-# Reuse the token during a warm Vercel function invocation.
 _eskiz_token = None
 
 
@@ -32,10 +31,8 @@ def json_response(handler, body, status=200):
 
 def get_eskiz_token(force_refresh=False):
     global _eskiz_token
-
     if _eskiz_token and not force_refresh:
         return _eskiz_token
-
     if not ESKIZ_EMAIL or not ESKIZ_PASSWORD:
         raise RuntimeError("Eskiz credentials are not configured")
 
@@ -43,7 +40,6 @@ def get_eskiz_token(force_refresh=False):
         "email": ESKIZ_EMAIL,
         "password": ESKIZ_PASSWORD,
     }).encode("utf-8")
-
     req = urllib.request.Request(ESKIZ_LOGIN_URL, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
 
@@ -53,15 +49,15 @@ def get_eskiz_token(force_refresh=False):
     token = (data.get("data") or {}).get("token")
     if not token:
         raise RuntimeError("Eskiz did not return an access token")
-
     _eskiz_token = token
     return token
 
 
 def send_eskiz_sms(phone, otp):
-    # Supabase sends E.164 numbers such as +998901234567.
     mobile_phone = "".join(ch for ch in str(phone) if ch.isdigit())
-    message = f"TemirDaftar tasdiqlash kodi: {otp}"
+
+    # QarzniUz uchun alohida SMS matni. Cardrive.uz matni ishlatilmaydi.
+    message = f"QarzniUz ilovasiga kirish uchun tasdiqlash kodi: {otp}"
 
     for attempt in range(2):
         token = get_eskiz_token(force_refresh=(attempt == 1))
@@ -92,7 +88,6 @@ def verify_supabase_hook(raw_body, headers):
     if not SEND_SMS_HOOK_SECRET:
         raise RuntimeError("SEND_SMS_HOOK_SECRET is not configured")
 
-    # Supabase dashboard normally supplies v1,whsec_<base64-secret>.
     secret = SEND_SMS_HOOK_SECRET
     if secret.startswith("v1,whsec_"):
         secret = secret[len("v1,whsec_"):]
@@ -114,8 +109,6 @@ def verify_supabase_hook(raw_body, headers):
     except ValueError:
         return False
 
-    # Reject stale/replayed requests. Supabase's standard webhook signing
-    # scheme uses a timestamp in seconds.
     if abs(int(time.time()) - timestamp_int) > 300:
         return False
 
@@ -126,10 +119,8 @@ def verify_supabase_hook(raw_body, headers):
 
     for signature in signatures.split(" "):
         if signature.startswith("v1,"):
-            supplied = signature[3:]
-            if hmac.compare_digest(supplied, expected):
+            if hmac.compare_digest(signature[3:], expected):
                 return True
-
     return False
 
 
@@ -137,7 +128,7 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         json_response(self, {
             "ok": True,
-            "service": "TemirDaftar Supabase Send SMS Hook",
+            "service": "QarzniUz Supabase Send SMS Hook",
         })
 
     def do_POST(self):
@@ -163,14 +154,12 @@ class handler(BaseHTTPRequestHandler):
                 json_response(self, {"ok": False, "error": "Missing phone or OTP"}, 400)
                 return
 
-            status, provider_response = send_eskiz_sms(phone, otp)
-            print(f"Supabase SMS hook: Eskiz accepted SMS, status={status}")
-
-            # Supabase only needs a successful HTTP response from the hook.
+            status, _provider_response = send_eskiz_sms(phone, otp)
+            print(f"QarzniUz SMS hook: Eskiz accepted SMS, status={status}")
             json_response(self, {"ok": True})
 
         except Exception as exc:
-            print("Send SMS hook error:", exc)
+            print("QarzniUz Send SMS hook error:", exc)
             json_response(self, {
                 "error": {
                     "http_code": 500,
