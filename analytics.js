@@ -1,4 +1,4 @@
-/* TemirDaftar Analytics V1
+/* QarzniUz Analytics V1
  * Frontend-only analytics layer.
  * Does not read or expose the Supabase service key.
  * Uses the existing public Supabase client + SECURITY DEFINER RPCs.
@@ -86,7 +86,7 @@
         p_campaign: ctx.campaign
       });
     } catch (error) {
-      console.warn('TemirDaftar analytics user registration failed:', error);
+      console.warn('QarzniUz analytics user registration failed:', error);
     }
   }
 
@@ -104,7 +104,7 @@
         p_metadata: metadata || {}
       });
     } catch (error) {
-      console.warn('TemirDaftar analytics event failed:', eventName, error);
+      console.warn('QarzniUz analytics event failed:', eventName, error);
     }
   }
 
@@ -115,7 +115,6 @@
 
   function setupInstallBanner() {
     try {
-      // Never show the browser banner when the site is already running as an app.
       const standalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
       const iosStandalone = window.navigator.standalone === true;
       if (standalone || iosStandalone) return;
@@ -141,57 +140,14 @@
           box-shadow: 0 8px 28px rgba(15,23,42,.18);
           animation: tdInstallSlide .28s ease-out;
         }
-        #td-install-banner .td-install-icon {
-          width: 42px;
-          height: 42px;
-          flex: 0 0 42px;
-          border-radius: 10px;
-          object-fit: cover;
-        }
+        #td-install-banner .td-install-icon { width: 42px; height: 42px; flex: 0 0 42px; border-radius: 10px; object-fit: cover; }
         #td-install-banner .td-install-copy { min-width: 0; flex: 1; }
-        #td-install-banner .td-install-title {
-          font-size: 14px;
-          font-weight: 800;
-          color: #1e293b;
-          margin-bottom: 2px;
-        }
-        #td-install-banner .td-install-text {
-          font-size: 11.5px;
-          line-height: 1.35;
-          color: #64748b;
-        }
-        #td-install-banner .td-install-action {
-          border: 0;
-          border-radius: 9px;
-          padding: 9px 11px;
-          background: #2563eb;
-          color: #fff;
-          font-size: 11px;
-          font-weight: 800;
-          white-space: nowrap;
-          cursor: pointer;
-        }
-        #td-install-banner .td-install-close {
-          position: absolute;
-          top: -8px;
-          right: -5px;
-          width: 24px;
-          height: 24px;
-          border: 1px solid #e2e8f0;
-          border-radius: 50%;
-          background: #fff;
-          color: #64748b;
-          font-size: 15px;
-          line-height: 20px;
-          cursor: pointer;
-        }
-        @keyframes tdInstallSlide {
-          from { opacity: 0; transform: translateY(16px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @media (min-width: 700px) {
-          #td-install-banner { max-width: 520px; left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); }
-        }
+        #td-install-banner .td-install-title { font-size: 14px; font-weight: 800; color: #1e293b; margin-bottom: 2px; }
+        #td-install-banner .td-install-text { font-size: 11.5px; line-height: 1.35; color: #64748b; }
+        #td-install-banner .td-install-action { border: 0; border-radius: 9px; padding: 9px 11px; background: #2563eb; color: #fff; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+        #td-install-banner .td-install-close { position: absolute; top: -8px; right: -5px; width: 24px; height: 24px; border: 1px solid #e2e8f0; border-radius: 50%; background: #fff; color: #64748b; font-size: 15px; line-height: 20px; cursor: pointer; }
+        @keyframes tdInstallSlide { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @media (min-width: 700px) { #td-install-banner { max-width: 520px; left: 50%; right: auto; transform: translateX(-50%); width: calc(100% - 24px); } }
       `;
       document.head.appendChild(style);
 
@@ -215,9 +171,7 @@
         document.getElementById('td-install-action').textContent = 'УСТАНОВИТЬ';
       }
 
-      const show = () => {
-        if (document.visibilityState === 'visible') banner.style.display = 'flex';
-      };
+      const show = () => { if (document.visibilityState === 'visible') banner.style.display = 'flex'; };
 
       document.getElementById('td-install-close').addEventListener('click', function () {
         banner.style.display = 'none';
@@ -229,10 +183,9 @@
         window.location.href = '/QarzniUz.apk';
       });
 
-      // Give the page a moment to load before showing the banner.
       setTimeout(show, 2500);
     } catch (error) {
-      console.warn('TemirDaftar install banner setup failed:', error);
+      console.warn('QarzniUz install banner setup failed:', error);
     }
   }
 
@@ -249,9 +202,7 @@
       setTimeout(function () {
         registerUser();
         track(mode === 'register' ? 'user_registered' : 'user_login', {
-          phone_present: Boolean(phone),
-          name_present: Boolean(name),
-          shop_present: Boolean(shop)
+          phone_present: Boolean(phone), name_present: Boolean(name), shop_present: Boolean(shop)
         });
       }, 300);
     }, true);
@@ -283,63 +234,54 @@
       const target = event.target.closest ? event.target.closest('button, a') : null;
       if (!target) return;
 
-      if (target.id === 'btn-tab-pro') {
-        track('premium_page_opened');
-      }
-
-      if (target.id === 'btn-send-bot') {
-        track('premium_payment_started', { channel: 'telegram' });
-      }
+      if (target.id === 'btn-tab-pro') track('premium_page_opened');
+      if (target.id === 'btn-send-bot') track('premium_payment_started', { channel: 'telegram' });
 
       if (target.id === 'btn-activate-promo') {
         const user = getCurrentUserSafe();
         const oldExpire = user ? localStorage.getItem('premium_expire_date_' + user.phone) : null;
         const startedAt = Date.now();
-
         setTimeout(function () {
           if (!user) return;
           const newExpire = localStorage.getItem('premium_expire_date_' + user.phone);
           if (newExpire && newExpire !== oldExpire && Date.now() - startedAt < 10000) {
-            track('premium_activated', {
-              plan: 'premium_30_days',
-              price_uzs: 25000,
-              activation: 'promo_code'
-            });
+            track('premium_activated', { plan: 'premium_30_days', price_uzs: 25000, activation: 'promo_code' });
           }
         }, 1200);
       }
 
-      if (target.classList.contains('btn-partial')) {
-        track('debt_partial_payment_clicked');
-      }
-
-      if (target.classList.contains('btn-pay')) {
-        track('debt_full_payment_clicked');
-      }
+      if (target.classList.contains('btn-partial')) track('debt_partial_payment_clicked');
+      if (target.classList.contains('btn-pay')) track('debt_full_payment_clicked');
     }, true);
   }
 
   function setupStorageTracking() {
     const originalSetItem = Storage.prototype.setItem;
-    if (originalSetItem.__temirdaftarWrapped) return;
+    if (originalSetItem.__qarzniuzWrapped) return;
 
     function wrappedSetItem(key, value) {
       const oldValue = this.getItem(key);
       originalSetItem.call(this, key, value);
-
       if (this !== localStorage || oldValue === value) return;
 
       if (key.indexOf('is_premium_user_') === 0 && value === 'true' && oldValue !== 'true') {
         const user = getCurrentUserSafe();
         const isTrial = user && !localStorage.getItem('td_paid_premium_seen_' + user.phone);
-        if (isTrial) {
-          track('premium_trial_started', { days: 3 });
-        }
+        if (isTrial) track('premium_trial_started', { days: 3 });
       }
     }
 
-    wrappedSetItem.__temirdaftarWrapped = true;
+    wrappedSetItem.__qarzniuzWrapped = true;
     Storage.prototype.setItem = wrappedSetItem;
+  }
+
+  function loadAuthBridge() {
+    if (document.querySelector('script[data-qarzniuz-auth]')) return;
+    const script = document.createElement('script');
+    script.src = '/auth-supabase.js?v=1';
+    script.defer = true;
+    script.dataset.qarzniuzAuth = '1';
+    document.head.appendChild(script);
   }
 
   function boot() {
@@ -349,6 +291,7 @@
     setupFormTracking();
     setupCustomerTracking();
     setupClickTracking();
+    loadAuthBridge();
 
     registerUser();
 
