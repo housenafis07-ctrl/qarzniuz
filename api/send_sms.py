@@ -56,8 +56,9 @@ def get_eskiz_token(force_refresh=False):
 def send_eskiz_sms(phone, otp):
     mobile_phone = "".join(ch for ch in str(phone) if ch.isdigit())
 
-    # QarzniUz uchun alohida SMS matni. Cardrive.uz matni ishlatilmaydi.
-    message = f"QarzniUz ilovasiga kirish uchun tasdiqlash kodi: {otp}"
+    # Eskiz moderatsiyasidan o'tgan QarzniUz shabloni:
+    # "Код верификации для входа к qarzniuz.uz: 000000"
+    message = f"Код верификации для входа к qarzniuz.uz: {otp}"
 
     for attempt in range(2):
         token = get_eskiz_token(force_refresh=(attempt == 1))
