@@ -25,7 +25,7 @@
   }
 
   function normalizePhone(raw) {
-    let digits = String(raw || '').replace(/\D/g, '');
+    const digits = String(raw || '').replace(/\D/g, '');
     if (digits.startsWith('998')) return '+' + digits;
     if (digits.startsWith('8') && digits.length === 9) return '+998' + digits;
     if (digits.length === 9) return '+998' + digits;
@@ -37,7 +37,7 @@
   }
 
   function setStatus(text, ok) {
-    let el = document.getElementById('qarzniuz-otp-status');
+    const el = document.getElementById('qarzniuz-otp-status');
     if (!el) return;
     el.textContent = text || '';
     el.style.color = ok ? '#15803d' : '#b91c1c';
@@ -145,24 +145,19 @@
   }
 
   async function ensureProfile(user, state) {
+    const meta = user.user_metadata || {};
+    const name = state.name || meta.full_name || 'Foydalanuvchi';
     try {
-      const meta = user.user_metadata || {};
-      const name = state.name || meta.full_name || 'Foydalanuvchi';
-      const shop = state.shop || meta.shop_name || "Mening Do'konim";
       const { error } = await getClient().from('profiles').upsert({
         id: user.id,
         full_name: name,
         phone: storagePhone(user.phone)
       }, { onConflict: 'id' });
       if (error) console.warn('QarzniUz profile upsert:', error.message);
-      return { name, shop };
     } catch (error) {
       console.warn('QarzniUz profile sync skipped:', error);
-      return {
-        name: state.name || user.user_metadata?.full_name || 'Foydalanuvchi',
-        shop: state.shop || user.user_metadata?.shop_name || "Mening Do'konim"
-      };
     }
+    return { name, shop: state.shop || meta.shop_name || "Mening Do'konim" };
   }
 
   async function verifyOtp() {
@@ -203,12 +198,8 @@
       sessionStorage.removeItem(OTP_STATE_KEY);
 
       setStatus('Tasdiqlandi. Tizim ochilmoqda...', true);
-      if (typeof window.initApp === 'function') {
-        window.currentUser = current;
-        window.initApp();
-      } else {
-        window.location.reload();
-      }
+      currentUser = current;
+      initApp();
     } catch (error) {
       console.error('QarzniUz OTP verify error:', error);
       setStatus('Kod noto‘g‘ri yoki muddati tugagan: ' + (error.message || ''), false);
@@ -227,21 +218,12 @@
       sendOtp();
     }, true);
 
-    const oldLogout = window.logoutApp;
     window.logoutApp = async function () {
       try { await getClient().auth.signOut(); } catch (_) {}
       localStorage.removeItem('shop_user');
-      window.currentUser = null;
+      currentUser = null;
       window.location.reload();
     };
-
-    getClient().auth.getSession().then(function ({ data }) {
-      if (!data.session) return;
-      // The existing app still uses currentUser/localStorage for its local debt key.
-      // Do not silently rewrite that data here; OTP verification does the migration.
-    }).catch(function (error) {
-      console.warn('QarzniUz session check failed:', error);
-    });
   }
 
   function boot() {
