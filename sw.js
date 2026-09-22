@@ -1,10 +1,11 @@
-const CACHE_NAME = 'temirdaftar-v16';
+const CACHE_NAME = 'qarzniuz-v17';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/analytics.js',
+  '/auth-supabase.js',
   '/admin-marketing.js?v=20260917-3',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -30,6 +31,10 @@ function patchHtml(html) {
 
   if (!html.includes('src="/analytics.js"')) {
     html = html.replace('</head>', '<script src="/analytics.js" defer></script>\n</head>');
+  }
+
+  if (!html.includes('src="/auth-supabase.js"')) {
+    html = html.replace('</head>', '<script src="/auth-supabase.js" defer></script>\n</head>');
   }
 
   if (html.includes('<title>TemirDaftar — Administrator</title>') && !html.includes('admin-marketing.js?v=20260917-3')) {
