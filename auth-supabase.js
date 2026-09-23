@@ -36,11 +36,26 @@
     return String(phone || '').replace(/\D/g, '');
   }
 
+  function ensureStatusElement() {
+    let el = document.getElementById('qarzniuz-otp-status');
+    if (el) return el;
+
+    const form = document.getElementById('auth-form');
+    if (!form) return null;
+
+    el = document.createElement('div');
+    el.id = 'qarzniuz-otp-status';
+    el.style.cssText = 'margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;min-height:18px;background:#fff7ed;';
+    form.after(el);
+    return el;
+  }
+
   function setStatus(text, ok) {
-    const el = document.getElementById('qarzniuz-otp-status');
+    const el = ensureStatusElement();
     if (!el) return;
     el.textContent = text || '';
     el.style.color = ok ? '#15803d' : '#b91c1c';
+    el.style.background = ok ? '#f0fdf4' : '#fef2f2';
   }
 
   function ensureOtpPanel() {
@@ -95,7 +110,7 @@
     const submit = document.getElementById('auth-submit-btn');
     submit.disabled = true;
     submit.textContent = 'SMS yuborilmoqda...';
-    setStatus('', true);
+    setStatus('SMS yuborish so‘rovi yuborilmoqda...', true);
 
     try {
       const { error } = await getClient().auth.signInWithOtp({
@@ -116,7 +131,7 @@
       setStatus('SMS yuborildi. Kodni kiriting.', true);
     } catch (error) {
       console.error('QarzniUz OTP send error:', error);
-      setStatus('SMS yuborilmadi: ' + (error.message || 'noma’lum xatolik'), false);
+      setStatus('SMS yuborilmadi: ' + (error?.message || 'noma’lum xatolik'), false);
     } finally {
       submit.disabled = false;
       submit.textContent = mode === 'register' ? 'Ro‘yxatdan o‘tish' : 'Kirish';
@@ -140,7 +155,7 @@
       setStatus('Yangi SMS kod yuborildi.', true);
     } catch (error) {
       console.error('QarzniUz OTP resend error:', error);
-      setStatus('Qayta yuborishda xatolik: ' + (error.message || 'noma’lum xatolik'), false);
+      setStatus('Qayta yuborishda xatolik: ' + (error?.message || 'noma’lum xatolik'), false);
     }
   }
 
@@ -202,7 +217,7 @@
       initApp();
     } catch (error) {
       console.error('QarzniUz OTP verify error:', error);
-      setStatus('Kod noto‘g‘ri yoki muddati tugagan: ' + (error.message || ''), false);
+      setStatus('Kod noto‘g‘ri yoki muddati tugagan: ' + (error?.message || ''), false);
     } finally {
       btn.disabled = false;
     }
@@ -232,6 +247,7 @@
       installAuthHandler();
     } catch (error) {
       console.error('QarzniUz Auth boot failed:', error);
+      setStatus('Autentifikatsiya ishga tushmadi: ' + (error?.message || 'noma’lum xatolik'), false);
     }
   }
 
