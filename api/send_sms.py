@@ -5,6 +5,7 @@ import json
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
@@ -137,6 +138,29 @@ def verify_supabase_hook(raw_body, headers):
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+
+        if query.get("test") == ["eskiz_login"]:
+            started = time.time()
+            try:
+                token = get_eskiz_token(force_refresh=True)
+                json_response(self, {
+                    "ok": True,
+                    "test": "eskiz_login",
+                    "login_ok": True,
+                    "token_received": bool(token),
+                    "elapsed_ms": round((time.time() - started) * 1000),
+                })
+            except Exception as exc:
+                json_response(self, {
+                    "ok": False,
+                    "test": "eskiz_login",
+                    "login_ok": False,
+                    "elapsed_ms": round((time.time() - started) * 1000),
+                    "error": str(exc)[:500],
+                }, 200)
+            return
+
         json_response(self, {
             "ok": True,
             "service": "QarzniUz Supabase Send SMS Hook",
