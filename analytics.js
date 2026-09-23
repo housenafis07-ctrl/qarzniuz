@@ -12,6 +12,7 @@
   const SESSION_KEY = 'td_analytics_session';
   const APP_OPEN_KEY = 'td_analytics_app_opened';
   const INSTALL_DISMISSED_KEY = 'td_install_banner_dismissed_until';
+  const AUTH_SCRIPT_VERSION = '20260923-2';
 
   function getClient() {
     try {
@@ -277,10 +278,16 @@
 
   function loadAuthBridge() {
     if (document.querySelector('script[data-qarzniuz-auth]')) return;
+
     const script = document.createElement('script');
-    script.src = '/auth-supabase.js?v=1';
-    script.defer = true;
+    script.src = '/auth-supabase.js?v=' + AUTH_SCRIPT_VERSION;
+    script.async = false;
     script.dataset.qarzniuzAuth = '1';
+
+    script.onerror = function () {
+      console.error('QarzniUz auth-supabase.js yuklanmadi:', script.src);
+    };
+
     document.head.appendChild(script);
   }
 
