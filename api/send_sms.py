@@ -1,3 +1,4 @@
+# QarzniUz OTP: Supabase Auth -> signed Send SMS Hook -> Eskiz -> SMS -> OTP verify
 import base64
 import hashlib
 import hmac
