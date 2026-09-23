@@ -12,7 +12,7 @@
   const SESSION_KEY = 'td_analytics_session';
   const APP_OPEN_KEY = 'td_analytics_app_opened';
   const INSTALL_DISMISSED_KEY = 'td_install_banner_dismissed_until';
-  const AUTH_SCRIPT_VERSION = '20260923-2';
+  const AUTH_SCRIPT_VERSION = '20260923-3';
 
   function getClient() {
     try {
@@ -209,6 +209,40 @@
     }, true);
   }
 
+  // Fix legacy login click handler: in LOGIN mode the button must never send OTP.
+  // We stop the old click handler before it reaches the button and route the action
+  // through the auth-supabase.js submit handler, which performs phone + PIN login.
+  function setupPinLoginClickGuard() {
+    document.addEventListener('click', function (event) {
+      const target = event.target && event.target.closest ? event.target.closest('#auth-submit-btn') : null;
+      if (!target) return;
+
+      const form = document.getElementById('auth-form');
+      const mode = (typeof authMode !== 'undefined') ? authMode : 'login';
+      if (!form || mode !== 'login') return;
+
+      const pin = document.getElementById('qarzniuz-login-pin');
+      if (!pin) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+
+      if (pin.value.replace(/\D/g, '').length !== 4) {
+        pin.focus();
+        pin.reportValidity?.();
+        return;
+      }
+
+      // Trigger the form submit path used by auth-supabase.js.
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit(target);
+      } else {
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      }
+    }, true);
+  }
+
   function setupCustomerTracking() {
     const form = document.getElementById('add-debt-form');
     if (!form) return;
@@ -296,6 +330,7 @@
     setupStorageTracking();
     setupInstallBanner();
     setupFormTracking();
+    setupPinLoginClickGuard();
     setupCustomerTracking();
     setupClickTracking();
     loadAuthBridge();
