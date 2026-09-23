@@ -5,11 +5,9 @@ import json
 import os
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
-
 
 ESKIZ_EMAIL = os.environ.get("ESKIZ_EMAIL", "")
 ESKIZ_PASSWORD = os.environ.get("ESKIZ_PASSWORD", "")
@@ -36,9 +34,7 @@ def multipart_body(fields):
     chunks = []
     for name, value in fields.items():
         chunks.append(f"--{boundary}\r\n".encode("utf-8"))
-        chunks.append(
-            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8")
-        )
+        chunks.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"))
         chunks.append(str(value).encode("utf-8"))
         chunks.append(b"\r\n")
     chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
@@ -50,22 +46,25 @@ def get_eskiz_token(force_refresh=False):
     if _eskiz_token and not force_refresh:
         return _eskiz_token
     if not ESKIZ_EMAIL or not ESKIZ_PASSWORD:
-        raise RuntimeError("Eskiz credentials are not configured")
+        raise RuntimeError("ESKIZ_EMAIL yoki ESKIZ_PASSWORD Vercel Environment Variables'da yo'q")
 
-    body, content_type = multipart_body({
-        "email": ESKIZ_EMAIL,
-        "password": ESKIZ_PASSWORD,
-    })
+    body, content_type = multipart_body({"email": ESKIZ_EMAIL, "password": ESKIZ_PASSWORD})
     req = urllib.request.Request(ESKIZ_LOGIN_URL, data=body, method="POST")
     req.add_header("Content-Type", content_type)
 
-    with urllib.request.urlopen(req, timeout=4) as response:
-        response_text = response.read().decode("utf-8", errors="replace")
-        data = json.loads(response_text) if response_text else {}
+    try:
+        with urllib.request.urlopen(req, timeout=2.5) as response:
+            response_text = response.read().decode("utf-8", errors="replace")
+            data = json.loads(response_text) if response_text else {}
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Eskiz login HTTP {exc.code}: {error_body[:300]}")
+    except Exception as exc:
+        raise RuntimeError(f"Eskiz login xatosi: {type(exc).__name__}: {exc}")
 
     token = (data.get("data") or {}).get("token")
     if not token:
-        raise RuntimeError("Eskiz did not return an access token")
+        raise RuntimeError(f"Eskiz login token qaytarmadi: {response_text[:300]}")
     _eskiz_token = token
     return token
 
@@ -81,27 +80,28 @@ def send_eskiz_sms(phone, otp):
             "message": message,
             "from": ESKIZ_FROM,
         })
-
         req = urllib.request.Request(ESKIZ_SEND_URL, data=body, method="POST")
         req.add_header("Authorization", f"Bearer {token}")
         req.add_header("Content-Type", content_type)
 
         try:
-            with urllib.request.urlopen(req, timeout=4) as response:
+            with urllib.request.urlopen(req, timeout=2.5) as response:
                 response_text = response.read().decode("utf-8", errors="replace")
                 return response.status, response_text
         except urllib.error.HTTPError as exc:
             error_body = exc.read().decode("utf-8", errors="replace")
             if exc.code == 401 and attempt == 0:
                 continue
-            raise RuntimeError(f"Eskiz SMS failed ({exc.code}): {error_body[:500]}")
+            raise RuntimeError(f"Eskiz SMS HTTP {exc.code}: {error_body[:300]}")
+        except Exception as exc:
+            raise RuntimeError(f"Eskiz SMS xatosi: {type(exc).__name__}: {exc}")
 
     raise RuntimeError("Eskiz SMS failed")
 
 
 def verify_supabase_hook(raw_body, headers):
     if not SEND_SMS_HOOK_SECRET:
-        raise RuntimeError("SEND_SMS_HOOK_SECRET is not configured")
+        raise RuntimeError("SEND_SMS_HOOK_SECRET Vercel Environment Variables'da yo'q")
 
     secret = SEND_SMS_HOOK_SECRET
     if secret.startswith("v1,whsec_"):
@@ -110,12 +110,11 @@ def verify_supabase_hook(raw_body, headers):
     try:
         secret_bytes = base64.b64decode(secret, validate=True)
     except Exception as exc:
-        raise RuntimeError("Invalid SEND_SMS_HOOK_SECRET format") from exc
+        raise RuntimeError("SEND_SMS_HOOK_SECRET noto'g'ri formatda") from exc
 
     webhook_id = headers.get("webhook-id", "")
     timestamp = headers.get("webhook-timestamp", "")
     signatures = headers.get("webhook-signature", "")
-
     if not webhook_id or not timestamp or not signatures:
         return False
 
@@ -128,14 +127,12 @@ def verify_supabase_hook(raw_body, headers):
         return False
 
     signed_content = f"{webhook_id}.{timestamp}.".encode("utf-8") + raw_body
-    expected = base64.b64encode(
-        hmac.new(secret_bytes, signed_content, hashlib.sha256).digest()
-    ).decode("ascii")
+    expected = base64.b64encode(hmac.new(secret_bytes, signed_content, hashlib.sha256).digest()).decode("ascii")
 
-    for signature in signatures.split(" "):
-        if signature.startswith("v1,") and hmac.compare_digest(signature[3:], expected):
-            return True
-    return False
+    return any(
+        signature.startswith("v1,") and hmac.compare_digest(signature[3:], expected)
+        for signature in signatures.split(" ")
+    )
 
 
 class handler(BaseHTTPRequestHandler):
@@ -143,6 +140,10 @@ class handler(BaseHTTPRequestHandler):
         json_response(self, {
             "ok": True,
             "service": "QarzniUz Supabase Send SMS Hook",
+            "eskiz_email_configured": bool(ESKIZ_EMAIL),
+            "eskiz_password_configured": bool(ESKIZ_PASSWORD),
+            "eskiz_from": ESKIZ_FROM,
+            "hook_secret_configured": bool(SEND_SMS_HOOK_SECRET),
         })
 
     def do_POST(self):
@@ -153,7 +154,6 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             raw_body = self.rfile.read(content_length)
-
             if not verify_supabase_hook(raw_body, self.headers):
                 json_response(self, {"ok": False, "error": "Unauthorized"}, 401)
                 return
@@ -163,7 +163,6 @@ class handler(BaseHTTPRequestHandler):
             sms = event.get("sms") or {}
             phone = user.get("phone")
             otp = sms.get("otp")
-
             if not phone or not otp:
                 json_response(self, {"ok": False, "error": "Missing phone or OTP"}, 400)
                 return
@@ -175,10 +174,9 @@ class handler(BaseHTTPRequestHandler):
         except Exception as exc:
             print("QarzniUz Send SMS hook error:", repr(exc))
             json_response(self, {
-                "error": {
-                    "http_code": 500,
-                    "message": "SMS provider request failed",
-                }
+                "ok": False,
+                "error": "SMS provider request failed",
+                "detail": str(exc)[:500],
             }, 500)
 
     def do_OPTIONS(self):
