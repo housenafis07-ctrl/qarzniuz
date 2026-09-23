@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qarzniuz-v17';
+const CACHE_NAME = 'qarzniuz-v18';
 
 const STATIC_ASSETS = [
   '/',
