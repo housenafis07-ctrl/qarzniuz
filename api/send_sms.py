@@ -19,6 +19,10 @@ ESKIZ_SEND_URL = "https://notify.eskiz.uz/api/message/sms/send"
 
 _eskiz_token = None
 
+# Supabase HTTP Send SMS Hook has a 5-second execution limit.
+# Keep each provider request short enough that login + send can finish inside that window.
+ESKIZ_REQUEST_TIMEOUT = 2
+
 
 def json_response(handler, body, status=200):
     payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -43,7 +47,7 @@ def get_eskiz_token(force_refresh=False):
     req = urllib.request.Request(ESKIZ_LOGIN_URL, data=body, method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
 
-    with urllib.request.urlopen(req, timeout=4) as response:
+    with urllib.request.urlopen(req, timeout=ESKIZ_REQUEST_TIMEOUT) as response:
         data = json.loads(response.read().decode("utf-8"))
 
     token = (data.get("data") or {}).get("token")
@@ -73,7 +77,7 @@ def send_eskiz_sms(phone, otp):
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
 
         try:
-            with urllib.request.urlopen(req, timeout=4) as response:
+            with urllib.request.urlopen(req, timeout=ESKIZ_REQUEST_TIMEOUT) as response:
                 return response.status, response.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
             if exc.code == 401 and attempt == 0:
