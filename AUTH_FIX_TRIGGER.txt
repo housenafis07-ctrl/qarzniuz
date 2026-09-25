@@ -1,1 +1,0 @@
-Temporary workflow trigger. The workflow will inject /auth-supabase.js into index.html and then this file can remain harmlessly in the feature branch.
