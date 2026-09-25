@@ -87,14 +87,27 @@ def normalize_phone(v):
 
 def member_for(user):
     uid = user["id"]
-    rows = rest("GET", "shop_members", {"user_id": "eq." + uid, "status": "eq.active", "select": "*", "limit": "1"})
+    rows = rest("GET", "shop_members", {
+        "user_id": "eq." + uid,
+        "select": "*",
+        "order": "created_at.desc",
+        "limit": "1"
+    })
     if rows:
-        return rows[0]
+        if rows[0].get("status") in ("active", "disabled"):
+            return rows[0]
     phone = normalize_phone(user.get("phone", ""))
     if phone:
-        pending = one("shop_members", {"phone": "eq." + phone, "status": "eq.pending", "select": "*", "limit": "1"})
+        pending = one("shop_members", {
+            "phone": "eq." + phone,
+            "status": "eq.pending",
+            "select": "*",
+            "limit": "1"
+        })
         if pending:
-            updated = rest("PATCH", "shop_members", {"id": "eq." + pending["id"]}, {"user_id": uid, "status": "active"})
+            updated = rest("PATCH", "shop_members", {"id": "eq." + pending["id"]}, {
+                "user_id": uid, "status": "active"
+            })
             return updated[0] if updated else pending
     return None
 
