@@ -734,6 +734,7 @@
 
         function initApp() {
             setLanguage(currentLang);
+            updateShopManagementVisibility(currentUser);
             if (!currentUser) {
                 authScreen.style.display = 'flex';
                 customers = [];
