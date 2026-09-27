@@ -40,9 +40,34 @@
   async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await finishLogin(data.user);}catch(e){console.error('QarzniUz PIN login:',e);status('Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
   async function finishLogin(user){if(!user)return;const s=readState()||{},meta=user.user_metadata||{},name=s.name||meta.full_name||'Foydalanuvchi',shop=s.shop||meta.shop_name||"Mening Do'konim",local={id:user.id,phone:storagePhone(user.phone),name,shopName:shop};localStorage.setItem('shop_user',JSON.stringify(local));try{localStorage.setItem('qarzniuz_user',JSON.stringify(local))}catch(_){}sessionStorage.removeItem(OTP_STATE_KEY);try{if(typeof currentUser!=='undefined')currentUser=local}catch(_){}try{if(typeof initApp==='function')initApp(local)}catch(e){console.warn('initApp:',e)}await openShopPanel(user);}
   async function verifyOtp(){const s=readState(),code=String(document.getElementById('qarzniuz-otp-code')?.value||'').replace(/\D/g,'');if(!s||!/^[0-9]{6}$/.test(code))return status('6 xonali SMS kodni kiriting.',false);try{const{data,error}=await getClient().auth.verifyOtp({phone:s.phone,token:code,type:'sms'});if(error)throw error;if(s.mode==='recovery'){await setPin();return}await setPin();if(data.user)await finishLogin(data.user)}catch(e){console.error('QarzniUz OTP:',e);status('SMS kod noto‘g‘ri yoki muddati tugagan.',false)}}
-  function installButtonGuard(){const btn=document.getElementById('auth-submit-btn');if(!btn)return;btn.type='button';document.addEventListener('click',function(e){const t=e.target&&e.target.closest?e.target.closest('#auth-submit-btn'):null;if(!t||busy)return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(mode()==='login')loginWithPin();else sendRegistrationOtp()},true);}
-  function installSubmitGuard(){const form=document.getElementById('auth-form');if(!form)return;form.addEventListener('submit',function(e){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(mode()==='login')loginWithPin();else sendRegistrationOtp()},true);}
-  function boot(){updateUI();installButtonGuard();installSubmitGuard();document.getElementById('btn-mode-login')?.addEventListener('click',()=>setTimeout(updateUI,0),true);document.getElementById('btn-mode-register')?.addEventListener('click',()=>setTimeout(updateUI,0),true);}
+  function installButtonGuard(){
+    const btn=document.getElementById('auth-submit-btn');
+    const form=document.getElementById('auth-form');
+    if(!btn||!form)return;
+    btn.type='button';
+    btn.onclick=function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(busy)return;
+      if(mode()==='login') loginWithPin();
+      else sendRegistrationOtp();
+    };
+    form.onsubmit=function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(busy)return;
+      if(mode()==='login') loginWithPin();
+      else sendRegistrationOtp();
+      return false;
+    };
+  }
+  function installSubmitGuard(){}
+  function boot(){
+    updateUI();
+    installButtonGuard();
+    document.getElementById('btn-mode-login')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
+    document.getElementById('btn-mode-register')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
+  }
   window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
