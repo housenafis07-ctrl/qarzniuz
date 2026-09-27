@@ -59,6 +59,7 @@ async function start(){
     document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';
     document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';
     localStorage.setItem('qarzniuz_shop_role',ctx.member.role);
+    localStorage.setItem('qarzniuz_shop_role_phone',ctx.user.phone||'');
     buildNav();
     await loadData();
     show('dashboard');
