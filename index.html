@@ -843,6 +843,8 @@
         function logoutApp() {
             if (confirm(L('confirmLogout'))) {
                 localStorage.removeItem('shop_user');
+                localStorage.removeItem('qarzniuz_shop_role');
+                localStorage.removeItem('qarzniuz_shop_role_phone');
                 currentUser = null;
                 customers = [];
                 window.location.reload();
@@ -1120,8 +1122,9 @@
         function updateShopManagementVisibility(user){
   const btn=document.getElementById('shop-management-btn');
   if(!btn)return;
-  const role=String(user?.role||user?.shopRole||localStorage.getItem('qarzniuz_role')||'').toUpperCase();
-  btn.style.display=role==='OWNER'?'inline-block':'none';
+  const role=String(user?.role||user?.shopRole||localStorage.getItem('qarzniuz_shop_role')||'').toUpperCase();
+  const rolePhone=localStorage.getItem('qarzniuz_shop_role_phone')||'';
+  btn.style.display=(role==='OWNER' && rolePhone===String(user?.phone||''))?'inline-block':'none';
 }
 function openShopPanel(user) {
             if (!user) {
