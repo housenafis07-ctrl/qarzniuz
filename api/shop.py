@@ -408,6 +408,31 @@ class handler(BaseHTTPRequestHandler):
                     raise PermissionError("Audit faqat egaga ochiq")
                 send_json(self, {"ok": True, "data": shop_rows("shop_audit_logs", shop["id"], "created_at.desc")[:500]})
                 return
+            if action == "activity":
+                rows = shop_rows("shop_audit_logs", shop["id"], "created_at.desc")
+                own = [x for x in rows if x.get("actor_user_id") == user["id"]][:300]
+                send_json(self, {"ok": True, "data": own})
+                return
+            if action == "reports":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Hisobotlar faqat OWNER uchun")
+                customers, debts, payments = payload(shop["id"], members)
+                active = [d for d in debts if d.get("status") == "active"]
+                recorded = [p for p in payments if p.get("status") == "recorded"]
+                by_seller = {}
+                for m in members:
+                    by_seller[m.get("user_id")] = {"name": m.get("full_name") or "Foydalanuvchi", "debts": 0, "debt_amount": 0, "payments": 0, "payment_amount": 0}
+                for d in active:
+                    x = by_seller.get(d.get("created_by"))
+                    if x: x["debts"] += 1; x["debt_amount"] += float(d.get("amount") or 0)
+                for p in recorded:
+                    x = by_seller.get(p.get("created_by"))
+                    if x: x["payments"] += 1; x["payment_amount"] += float(p.get("amount") or 0)
+                for x in by_seller.values():
+                    x["debt_amount"] = round(x["debt_amount"], 2)
+                    x["payment_amount"] = round(x["payment_amount"], 2)
+                send_json(self, {"ok": True, "data": {"customers": len(customers), "active_debtors": sum(1 for c in customers if float(c.get("balance") or 0) > 0.009), "debt_total": round(sum(float(x.get("amount") or 0) for x in active),2), "payment_total": round(sum(float(x.get("amount") or 0) for x in recorded),2), "seller_stats": list(by_seller.values())}})
+                return
             raise RuntimeError("Noma'lum action")
         except PermissionError as e:
             send_json(self, {"ok": False, "error": str(e)}, 403)
@@ -429,6 +454,17 @@ class handler(BaseHTTPRequestHandler):
                     body.get("customers"),
                 )
                 send_json(self, {"ok": True, "data": {"imported": count}})
+                return
+            if action == "shop_update":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                name = str(body.get("name", "")).strip()[:160]
+                if not name:
+                    raise RuntimeError("Do'kon nomi kerak")
+                old_shop = dict(shop)
+                updated = rest("PATCH", "shops", {"id": "eq." + shop["id"]}, {"name": name})[0]
+                audit(shop["id"], user["id"], member["full_name"], "UPDATE", "SHOP", shop["id"], old_shop, updated)
+                send_json(self, {"ok": True, "data": updated})
                 return
             if action == "customer_create":
                 name = str(body.get("full_name", "")).strip()[:160]
