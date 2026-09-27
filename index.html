@@ -873,13 +873,16 @@
             }
         });
 
-        function logoutApp() {
+        async function logoutApp() {
             if (confirm(L('confirmLogout'))) {
                 localStorage.removeItem('shop_user');
                 localStorage.removeItem('qarzniuz_shop_role');
                 localStorage.removeItem('qarzniuz_shop_role_phone');
                 currentUser = null;
                 customers = [];
+                try {
+                    if (window.QarzniUzAuth?.logout) await window.QarzniUzAuth.logout();
+                } catch (_) {}
                 window.location.reload();
             }
         }
