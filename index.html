@@ -183,6 +183,9 @@
             </div>
 
             <div id="reg-fields" style="display: none;">
+                <div id="registration-role-badge" style="margin:-8px 0 14px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:700;text-align:center;">
+                    🏪 Do‘kon egasi sifatida ro‘yxatdan o‘tish
+                </div>
                 <div class="form-group">
                     <label>Kim sifatida ro‘yxatdan o‘tasiz?</label>
                     <div id="auth-role-choice" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -796,7 +799,20 @@
             }
             if (shopGroup) shopGroup.style.display = role === 'OWNER' ? 'block' : 'none';
             if (shopInput) shopInput.required = role === 'OWNER';
-            if (hint) hint.style.display = role === 'SELLER' ? 'block' : 'none';
+            if (hint) {
+                hint.style.display = role === 'SELLER' ? 'block' : 'none';
+                hint.innerHTML = role === 'SELLER'
+                    ? '👤 <b>Sotuvchi sifatida</b> ro‘yxatdan o‘tyapsiz. Sizni do‘kon egasi telefon raqamingiz orqali o‘z do‘koniga qo‘shishi kerak.'
+                    : '🏪 <b>Do‘kon egasi sifatida</b> yangi do‘kon yaratasiz.';
+            }
+            const roleBadge = document.getElementById('registration-role-badge');
+            if (roleBadge) {
+                roleBadge.textContent = role === 'SELLER'
+                    ? '👤 Sotuvchi sifatida ro‘yxatdan o‘tish'
+                    : '🏪 Do‘kon egasi sifatida ro‘yxatdan o‘tish';
+                roleBadge.style.background = role === 'SELLER' ? '#f3e8ff' : '#eff6ff';
+                roleBadge.style.color = role === 'SELLER' ? '#6b21a8' : '#1d4ed8';
+            }
         }
 
         function switchAuthMode(mode) {
