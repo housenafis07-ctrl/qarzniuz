@@ -32,7 +32,16 @@ async function start(){
       }
     }catch(e){console.warn('shop session handoff:',e)}
   }
-  if(!session){document.getElementById('login').classList.remove('hidden');return}try{ctx=await api('/api/shop?action=bootstrap');await migrateLegacyData();document.getElementById('app').classList.remove('hidden');document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';buildNav();await loadData();show('dashboard')}catch(e){document.getElementById('login').classList.remove('hidden');toast(e.message)}}
+  if(!session){document.getElementById('login').classList.remove('hidden');return}try{ctx=await api('/api/shop?action=bootstrap');await migrateLegacyData();document.getElementById('app').classList.remove('hidden');document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';buildNav();await loadData();show('dashboard')}catch(e){
+    console.error('Shop panel bootstrap failed:',e);
+    const login=document.getElementById('login');
+    if(login){
+      login.classList.remove('hidden');
+      const box=login.querySelector('p');
+      if(box) box.innerHTML='<b>Do‘kon paneli ochilmadi.</b><br><span style="color:#b91c1c">'+esc(e?.message||'Noma’lum server xatosi')+'</span>';
+    }
+    toast(e?.message||'Do‘kon panelini ochib bo‘lmadi');
+  }}
 function buildNav(){let a=[['dashboard','Dashboard'],['customers','Mijozlar'],['debts','Qarzdorlar'],['payments','To‘lovlar']];if(ctx.member.role==='OWNER')a.push(['sellers','Sotuvchilar'],['reports','Hisobotlar'],['audit','Audit tarixi'],['export','Export / Backup'],['settings','Sozlamalar']);else a.push(['activity','Mening faoliyatim']);document.getElementById('nav').innerHTML=a.map(x=>'<button id="n-'+x[0]+'" onclick="show(\''+x[0]+'\')">'+x[1]+'</button>').join('')}
 async function migrateLegacyData(){
   if(!ctx?.user?.id)return false;
