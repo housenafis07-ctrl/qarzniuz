@@ -57,6 +57,12 @@ def auth_user(h):
 
 
 def rest(method, table, query=None, body=None, prefer=None):
+    # Backward-compatible convenience: all POST call sites in this API pass
+    # the JSON row as the third argument. Never serialize that row into the
+    # URL as PostgREST filters (e.g. name=Mening Do'konim).
+    if method in ("POST", "PATCH") and body is None and isinstance(query, dict):
+        body, query = query, None
+
     # Production should use the service-role key. If it is not configured,
     # fall back to the authenticated user's JWT so Supabase RLS remains in control.
     use_service = bool(SUPABASE_SERVICE_KEY)
