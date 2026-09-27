@@ -142,25 +142,72 @@ def member_for(user):
 
 
 def bootstrap(user):
-    existing = member_for(user)
-    if existing:
-        shop = one(
-            "shops", {"id": "eq." + existing["shop_id"], "select": "*", "limit": "1"}
-        )
-        if shop:
-            return existing, shop
-        raise RuntimeError("A'zolik do'koni topilmadi")
-
     uid = user["id"]
     meta = user.get("user_metadata") or {}
-    name = str(meta.get("full_name") or meta.get("name") or "Do'kon egasi").strip()[:120]
     phone = normalize_phone(user.get("phone", ""))
+    name = str(meta.get("full_name") or meta.get("name") or "Do'kon egasi").strip()[:120]
 
-    shop = one(
+    # Owner is determined by ownership of a shop, not by whichever membership
+    # row happens to be returned first.
+    owned = one(
         "shops",
         {"owner_id": "eq." + uid, "select": "*", "order": "created_at.asc", "limit": "1"},
     )
-    if shop:
+    if owned:
+        members = rest(
+            "GET",
+            "shop_members",
+            {"shop_id": "eq." + owned["id"], "user_id": "eq." + uid, "select": "*", "limit": "1"},
+        )
+        if members:
+            member = members[0]
+            if member.get("role") != "OWNER" or member.get("status") != "active":
+                updated = rest(
+                    "PATCH",
+                    "shop_members",
+                    {"id": "eq." + member["id"]},
+                    {"role": "OWNER", "status": "active", "full_name": name, "phone": phone or member.get("phone")},
+                )
+                member = updated[0] if updated else member
+        else:
+            member = rest(
+                "POST",
+                "shop_members",
+                {
+                    "shop_id": owned["id"],
+                    "user_id": uid,
+                    "phone": phone or uid,
+                    "full_name": name,
+                    "role": "OWNER",
+                    "status": "active",
+                },
+            )[0]
+        return member, owned
+
+    # A pending invitation always wins over public Owner registration.
+    if phone:
+        pending = one(
+            "shop_members",
+            {"phone": "eq." + phone, "status": "eq.pending", "select": "*", "limit": "1"},
+        )
+        if pending:
+            updated = rest(
+                "PATCH",
+                "shop_members",
+                {"id": "eq." + pending["id"]},
+                {"user_id": uid, "status": "active"},
+            )
+            member = updated[0] if updated else pending
+            shop = one("shops", {"id": "eq." + member["shop_id"], "select": "*", "limit": "1"})
+            if shop:
+                return member, shop
+
+    # Public "Ro'yxatdan o'tish" creates a new shop and makes this user its Owner.
+    if meta.get("qz_registration_intent") == "OWNER":
+        shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
+        shop = rest(
+            "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
+        )[0]
         member = rest(
             "POST",
             "shop_members",
@@ -175,6 +222,17 @@ def bootstrap(user):
         )[0]
         return member, shop
 
+    # Existing membership is used for normal login.
+    existing = member_for(user)
+    if existing:
+        shop = one(
+            "shops", {"id": "eq." + existing["shop_id"], "select": "*", "limit": "1"}
+        )
+        if shop:
+            return existing, shop
+        raise RuntimeError("A'zolik do'koni topilmadi")
+
+    # First login without an explicit registration intent also bootstraps Owner.
     shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
     shop = rest(
         "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
