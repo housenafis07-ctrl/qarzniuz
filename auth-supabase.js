@@ -82,13 +82,39 @@
         }});
       }catch(e){console.warn('Registration intent:',e)}
     }
-    const local={id:user.id,phone:storagePhone(user.phone),name,shopName:shop};
+    // Resolve the server-side shop membership before opening the app.
+    // This is the authoritative role check: OWNER gets a shop, SELLER must
+    // have a pending invitation for this exact phone number.
+    let membership=null;
+    try{
+      const {data:{session}}=await getClient().auth.getSession();
+      if(!session?.access_token) throw new Error('Sessiya yaratilmadi');
+      const r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.ok) throw new Error(j.error||'Do‘kon a’zoligi topilmadi');
+      membership=j.data;
+    }catch(e){
+      console.error('QarzniUz shop access:',e);
+      try{await getClient().auth.signOut()}catch(_){}
+      const sellerMsg='Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.';
+      status(role==='SELLER'?sellerMsg:(e?.message||'Do‘kon profilini yaratishda xatolik yuz berdi.'),false);
+      return;
+    }
+    const serverRole=String(membership.member?.role||'').toUpperCase();
+    const local={
+      id:user.id,
+      phone:storagePhone(user.phone),
+      name:membership.member?.full_name||name,
+      shopName:membership.shop?.name||shop,
+      role:serverRole
+    };
     localStorage.setItem('shop_user',JSON.stringify(local));
     try{localStorage.setItem('qarzniuz_user',JSON.stringify(local))}catch(_){}
+    localStorage.setItem('qarzniuz_shop_role',serverRole);
+    localStorage.setItem('qarzniuz_shop_role_phone',local.phone);
     sessionStorage.removeItem(OTP_STATE_KEY);
     try{if(typeof currentUser!=='undefined')currentUser=local}catch(_){}
     try{if(typeof initApp==='function')initApp(local)}catch(e){console.warn('initApp:',e)}
-    await openShopPanel(user);
   }
   async function verifyOtp(){const s=readState(),code=String(document.getElementById('qarzniuz-otp-code')?.value||'').replace(/\D/g,'');if(!s||!/^[0-9]{6}$/.test(code))return status('6 xonali SMS kodni kiriting.',false);try{const{data,error}=await getClient().auth.verifyOtp({phone:s.phone,token:code,type:'sms'});if(error)throw error;if(s.mode==='recovery'){await setPin();return}await setPin();if(data.user)await finishLogin(data.user)}catch(e){console.error('QarzniUz OTP:',e);status('SMS kod noto‘g‘ri yoki muddati tugagan.',false)}}
   function installButtonGuard(){
