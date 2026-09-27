@@ -38,7 +38,7 @@
     }catch(e){status('SMS yuborilmadi: '+(e?.message||'noma’lum xatolik'),false);}
     finally{busy=false;updateUI();}
   }
-  async function startRecovery(){const ph=phone();if(!/^\+998\d{9}$/.test(ph))return alert('Avval telefon raqamingizni kiriting.');if(busy)return;busy=true;try{const{error}=await getClient().auth.signInWithOtp({phone:ph,options:{shouldCreateUser:false}});if(error)throw error;sessionStorage.setItem(OTP_STATE_KEY,JSON.stringify({phone:ph,mode:'recovery',name:'',shop:'',sentAt:Date.now()}));showOtp(ph,true);status('SMS yuborildi. Kodni kiriting.');}catch(e){status('PIN tiklash SMS yuborilmadi: '+(e?.message||'raqam ro‘yxatdan o‘tmagan'),false);}finally{busy=false;}}
+  async function startRecovery(){const ph=phone();if(!/^\+998\d{9}$/.test(ph))return alert('Avval telefon raqamingizni kiriting.');if(busy)return;busy=true;try{try{await getClient().auth.signOut({scope:'local'});}catch(_){}const{error}=await getClient().auth.signInWithOtp({phone:ph,options:{shouldCreateUser:false}});if(error)throw error;sessionStorage.setItem(OTP_STATE_KEY,JSON.stringify({phone:ph,mode:'recovery',name:'',shop:'',sentAt:Date.now()}));showOtp(ph,true);status('SMS yuborildi. Kodni kiriting.');}catch(e){status('PIN tiklash SMS yuborilmadi: '+(e?.message||'raqam ro‘yxatdan o‘tmagan'),false);}finally{busy=false;}}
   function readState(){try{return JSON.parse(sessionStorage.getItem(OTP_STATE_KEY)||'null')}catch(_){return null}}
   async function resendOtp(){
     const s=readState();if(!s||busy)return;busy=true;
@@ -51,7 +51,7 @@
     }catch(e){status('Qayta yuborishda xatolik: '+(e?.message||'noma’lum xatolik'),false);}finally{busy=false;}
   }
   function pinPanel(){const p=document.createElement('div');p.id='qarzniuz-pin-panel';p.style.cssText='position:fixed;inset:0;z-index:99999;background:#fff;display:flex;align-items:center;justify-content:center;padding:24px;';p.innerHTML='<div style="width:min(380px,100%);text-align:center;font-family:inherit"><div style="font-size:24px;font-weight:800;margin-bottom:8px">QarzniUz</div><div id="q-pin-title" style="font-size:18px;font-weight:700;margin-bottom:8px">Yangi PIN-kod yarating</div><div id="q-pin-hint" style="font-size:13px;color:#64748b;margin-bottom:18px">4 xonali PIN-kod kiriting</div><input id="q-pin-input" inputmode="numeric" autocomplete="new-password" maxlength="4" type="password" style="width:100%;text-align:center;font-size:26px;letter-spacing:14px;padding:12px;border:1px solid #cbd5e1;border-radius:12px"><button id="q-pin-btn" type="button" class="btn" style="width:100%;margin-top:12px">Davom etish</button><div id="q-pin-error" style="min-height:20px;margin-top:10px;color:#b91c1c;font-size:13px"></div></div>';document.body.appendChild(p);return p;}
-  async function setPin(verifiedUser=null){const p=pinPanel(),input=p.querySelector('#q-pin-input'),btn=p.querySelector('#q-pin-btn'),title=p.querySelector('#q-pin-title'),hint=p.querySelector('#q-pin-hint'),err=p.querySelector('#q-pin-error');let first=null;const render=()=>{const c=first!==null;title.textContent=c?'PIN-kodni tasdiqlang':'Yangi PIN-kod yarating';hint.textContent=c?'Xuddi shu 4 xonali PIN-kodni yana kiriting.':'Keyingi kirishlarda telefon raqami bilan birga shu PIN-kod ishlatiladi.';btn.textContent=c?'PIN-kodni saqlash':'Davom etish';};render();input.focus();btn.onclick=async()=>{const v=input.value.replace(/\D/g,'');err.textContent='';if(!/^\d{4}$/.test(v)){err.textContent='PIN-kod aynan 4 ta raqamdan iborat bo‘lishi kerak.';return}if(first===null){first=v;input.value='';render();return}if(v!==first){err.textContent='PIN-kodlar mos kelmadi.';first=null;input.value='';render();return}btn.disabled=true;try{const h=await hashPin(v);const currentUser=verifiedUser||null;const current=currentUser?{data:{user:currentUser},error:null}:await getClient().auth.getUser();if(current.error)throw current.error;const oldHash=String(current.data?.user?.user_metadata?.qarzniuz_pin_hash||'');if(oldHash!==h){const{error}=await getClient().auth.updateUser({password:h,data:{qarzniuz_pin_hash:h}});if(error)throw error;}p.remove();await finishLogin(current.data.user);}catch(e){console.error('QarzniUz set PIN:',e);err.textContent=e?.message||'PIN-kodni saqlashda xatolik. Qayta urinib ko‘ring.';btn.disabled=false;}};input.addEventListener('input',()=>input.value=input.value.replace(/\D/g,'').slice(0,4));input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click()});}
+  async function setPin(verifiedUser=null,verifiedSession=null,isRegistration=false){const p=pinPanel(),input=p.querySelector('#q-pin-input'),btn=p.querySelector('#q-pin-btn'),title=p.querySelector('#q-pin-title'),hint=p.querySelector('#q-pin-hint'),err=p.querySelector('#q-pin-error');let first=null;const render=()=>{const c=first!==null;title.textContent=c?'PIN-kodni tasdiqlang':'Yangi PIN-kod yarating';hint.textContent=c?'Xuddi shu 4 xonali PIN-kodni yana kiriting.':'Keyingi kirishlarda telefon raqami bilan birga shu PIN-kod ishlatiladi.';btn.textContent=c?'PIN-kodni saqlash':'Davom etish';};render();input.focus();btn.onclick=async()=>{const v=input.value.replace(/\D/g,'');err.textContent='';if(!/^\d{4}$/.test(v)){err.textContent='PIN-kod aynan 4 ta raqamdan iborat bo‘lishi kerak.';return}if(first===null){first=v;input.value='';render();return}if(v!==first){err.textContent='PIN-kodlar mos kelmadi.';first=null;input.value='';render();return}btn.disabled=true;try{const h=await hashPin(v);const currentUser=verifiedUser||null;const current=currentUser?{data:{user:currentUser},error:null}:await getClient().auth.getUser();if(current.error)throw current.error;const oldHash=String(current.data?.user?.user_metadata?.qarzniuz_pin_hash||'');if(oldHash!==h){const{error}=await getClient().auth.updateUser({password:h,data:{qarzniuz_pin_hash:h}});if(error)throw error;}p.remove();await finishLogin(current.data.user,verifiedSession,isRegistration);}catch(e){console.error('QarzniUz set PIN:',e);err.textContent=e?.message||'PIN-kodni saqlashda xatolik. Qayta urinib ko‘ring.';btn.disabled=false;}};input.addEventListener('input',()=>input.value=input.value.replace(/\D/g,'').slice(0,4));input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click()});}
   async function openShopPanel(user){
     try{
       const {data:{session}}=await getClient().auth.getSession();
@@ -68,11 +68,11 @@
       return false;
     }
   }
-  async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await finishLogin(data.user);}catch(e){console.error('QarzniUz PIN login:',e);status(e?.message||'Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
-  async function finishLogin(user){
+  async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{sessionStorage.removeItem(OTP_STATE_KEY);const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;if(!data?.user||!data?.session)throw new Error('Auth sessiyasi yaratilmadi.');await finishLogin(data.user,data.session,false);}catch(e){console.error('QarzniUz PIN login:',e);status(e?.message||'Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
+  async function finishLogin(user,session=null,isRegistration=false){
     if(!user)return;
-    const s=readState()||{},meta=user.user_metadata||{};
-    const isRegistration=s.mode==='register';
+    const meta=user.user_metadata||{};
+    const s=isRegistration?(readState()||{}):{};
     const registrationRole=isRegistration?(String(s.registrationRole||'OWNER').toUpperCase()==='SELLER'?'SELLER':'OWNER'):null;
     const name=isRegistration?(s.name||meta.full_name||'Foydalanuvchi'):(meta.full_name||'Foydalanuvchi');
     const shop=isRegistration&&registrationRole==='OWNER'?(s.shop||meta.shop_name||"Mening Do'konim"):(meta.shop_name||'');
@@ -86,15 +86,18 @@
         }});
       }catch(e){console.warn('Registration intent:',e)}
     }
-    // Always refresh the Supabase session before calling the server API.
-    // This prevents an expired browser token from being sent to /api/shop.
+    // Use the fresh session returned by signInWithPassword/verifyOtp.
+    // If it is not available, getSession() will recover/refresh it as needed.
     try{
-      const refreshed=await getClient().auth.refreshSession();
-      if(refreshed.error)throw refreshed.error;
-      if(refreshed.data?.user)user=refreshed.data.user;
+      if(!session?.access_token){
+        const current=await getClient().auth.getSession();
+        if(current.error)throw current.error;
+        session=current.data?.session||null;
+      }
+      if(!session?.access_token)throw new Error('Sessiya yaratilmadi.');
     }catch(e){
-      console.error('QarzniUz session refresh:',e);
-      throw new Error('Sessiya muddati tugagan. Iltimos, qayta kiring.');
+      console.error('QarzniUz session:',e);
+      throw new Error('Sessiya yaratilmadi yoki muddati tugagan. Qayta urinib ko‘ring.');
     }
     // Resolve the server-side shop membership before opening the app.
     // This is the authoritative role check: OWNER gets a shop, SELLER must
@@ -103,8 +106,18 @@
     try{
       const {data:{session}}=await getClient().auth.getSession();
       if(!session?.access_token) throw new Error('Sessiya yaratilmadi');
-      const r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
-      const j=await r.json().catch(()=>({}));
+      let r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
+      let j=await r.json().catch(()=>({}));
+      // One controlled retry with a fresh access token for old tabs/sessions.
+      if(r.status===401){
+        const refreshed=await getClient().auth.refreshSession({refresh_token:session.refresh_token});
+        if(!refreshed.error&&refreshed.data?.session){
+          session=refreshed.data.session;
+          if(refreshed.data.user)user=refreshed.data.user;
+          r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
+          j=await r.json().catch(()=>({}));
+        }
+      }
       if(!r.ok||!j.ok) throw new Error(j.error||'Do‘kon a’zoligi topilmadi');
       membership=j.data;
     }catch(e){
@@ -130,7 +143,7 @@
     try{if(typeof currentUser!=='undefined')currentUser=local}catch(_){}
     try{if(typeof initApp==='function')initApp(local)}catch(e){console.warn('initApp:',e)}
   }
-  async function verifyOtp(){const s=readState(),code=String(document.getElementById('qarzniuz-otp-code')?.value||'').replace(/\D/g,'');if(!s||!/^[0-9]{6}$/.test(code))return status('6 xonali SMS kodni kiriting.',false);try{const{data,error}=await getClient().auth.verifyOtp({phone:s.phone,token:code,type:'sms'});if(error)throw error;if(data?.session?.access_token){await getClient().auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});}if(!data?.user)throw new Error('SMS tasdiqlandi, lekin foydalanuvchi sessiyasi yaratilmadi.');await setPin(data.user);}catch(e){console.error('QarzniUz OTP:',e);status(e?.message||'SMS kod noto‘g‘ri yoki muddati tugagan.',false)}}
+  async function verifyOtp(){const s=readState(),code=String(document.getElementById('qarzniuz-otp-code')?.value||'').replace(/\D/g,'');if(!s||!/^[0-9]{6}$/.test(code))return status('6 xonali SMS kodni kiriting.',false);try{const{data,error}=await getClient().auth.verifyOtp({phone:s.phone,token:code,type:'sms'});if(error)throw error;if(!data?.session?.access_token)throw new Error('SMS tasdiqlandi, lekin sessiya yaratilmadi.');if(!data?.user)throw new Error('SMS tasdiqlandi, lekin foydalanuvchi sessiyasi yaratilmadi.');await getClient().auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});await setPin(data.user,data.session,s.mode==='register');}catch(e){console.error('QarzniUz OTP:',e);status(e?.message||'SMS kod noto‘g‘ri yoki muddati tugagan.',false)}}
   function installButtonGuard(){
     const btn=document.getElementById('auth-submit-btn');
     const form=document.getElementById('auth-form');
@@ -170,6 +183,6 @@
     document.getElementById('btn-mode-login')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
     document.getElementById('btn-mode-register')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
   }
-  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI};
+  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI,logout:async function(){sessionStorage.removeItem(OTP_STATE_KEY);try{await getClient().auth.signOut({scope:'local'});}catch(_){} }};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
