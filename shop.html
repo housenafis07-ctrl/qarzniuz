@@ -16,7 +16,26 @@
 const SUPABASE_URL='https://yzicsoyufdghwiezqjsa.supabase.co',SUPABASE_ANON_KEY='sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM';const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});let ctx=null,data={customers:[],debts:[],payments:[],members:[]},current='dashboard';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),money=n=>new Intl.NumberFormat('uz-UZ').format(Number(n||0))+' so‘m',customerName=id=>data.customers.find(x=>x.id===id)?.full_name||'—';
 function toast(s){const e=document.getElementById('toast');e.textContent=s;e.style.display='block';clearTimeout(window._t);window._t=setTimeout(()=>e.style.display='none',2600)}
-async function api(path,body){const {data:{session}}=await sb.auth.getSession();if(!session)throw Error('Sessiya yo‘q');const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:body?JSON.stringify(body):undefined,cache:'no-store'}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Xatolik');return j.data}
+async function api(path,body){
+  let {data:{session}}=await sb.auth.getSession();
+  if(!session)throw Error('Sessiya topilmadi. Asosiy ilovaga qaytib qayta kiring.');
+  const request=async(s)=>{
+    const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token},body:body?JSON.stringify(body):undefined,cache:'no-store'});
+    const j=await r.json().catch(()=>({}));
+    return {r,j};
+  };
+  let {r,j}=await request(session);
+  if(r.status===401){
+    const refreshed=await sb.auth.refreshSession();
+    session=refreshed.data?.session||null;
+    if(session)({r,j}=await request(session));
+  }
+  if(!r.ok||!j.ok){
+    const msg=j.error||('Server xatosi ('+r.status+')');
+    throw Error(msg);
+  }
+  return j.data;
+}
 async function start(){
   let {data:{session}}=await sb.auth.getSession();
   if(!session){
@@ -32,13 +51,23 @@ async function start(){
       }
     }catch(e){console.warn('shop session handoff:',e)}
   }
-  if(!session){document.getElementById('login').classList.remove('hidden');return}try{ctx=await api('/api/shop?action=bootstrap');await migrateLegacyData();document.getElementById('app').classList.remove('hidden');document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';buildNav();await loadData();show('dashboard')}catch(e){
+  if(!session){document.getElementById('login').classList.remove('hidden');return}
+  try{
+    ctx=await api('/api/shop?action=bootstrap');
+    await migrateLegacyData();
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';
+    document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';
+    buildNav();
+    await loadData();
+    show('dashboard');
+  }catch(e){
     console.error('Shop panel bootstrap failed:',e);
     const login=document.getElementById('login');
     if(login){
       login.classList.remove('hidden');
       const box=login.querySelector('p');
-      if(box) box.innerHTML='<b>Do‘kon paneli ochilmadi.</b><br><span style="color:#b91c1c">'+esc(e?.message||'Noma’lum server xatosi')+'</span>';
+      if(box) box.innerHTML='<b>Do‘kon paneli ochilmadi.</b><br><span style="color:#b91c1c">'+esc(e?.message||'Noma’lum server xatosi')+'</span><br><button class="btn" style="margin-top:12px" onclick="location.href=\'/shop.html?retry=1\'">Qayta urinish</button>';
     }
     toast(e?.message||'Do‘kon panelini ochib bo‘lmadi');
   }}
