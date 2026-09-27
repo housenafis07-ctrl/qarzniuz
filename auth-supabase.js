@@ -68,22 +68,33 @@
       return false;
     }
   }
-  async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await finishLogin(data.user);}catch(e){console.error('QarzniUz PIN login:',e);status('Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
+  async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await finishLogin(data.user);}catch(e){console.error('QarzniUz PIN login:',e);status(e?.message||'Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
   async function finishLogin(user){
     if(!user)return;
     const s=readState()||{},meta=user.user_metadata||{};
-    const name=s.name||meta.full_name||'Foydalanuvchi';
-    const role=s.registrationRole==='SELLER'?'SELLER':'OWNER';
-    const shop=role==='OWNER'?(s.shop||meta.shop_name||"Mening Do'konim"):'';
-    if(s.mode==='register'){
+    const isRegistration=s.mode==='register';
+    const registrationRole=isRegistration?(String(s.registrationRole||'OWNER').toUpperCase()==='SELLER'?'SELLER':'OWNER'):null;
+    const name=isRegistration?(s.name||meta.full_name||'Foydalanuvchi'):(meta.full_name||'Foydalanuvchi');
+    const shop=isRegistration&&registrationRole==='OWNER'?(s.shop||meta.shop_name||"Mening Do'konim"):(meta.shop_name||'');
+    if(isRegistration){
       try{
         await getClient().auth.updateUser({data:{
           ...meta,
           full_name:name,
-          shop_name:role==='OWNER'?shop:null,
-          qz_registration_intent:role
+          shop_name:registrationRole==='OWNER'?shop:null,
+          qz_registration_intent:registrationRole
         }});
       }catch(e){console.warn('Registration intent:',e)}
+    }
+    // Always refresh the Supabase session before calling the server API.
+    // This prevents an expired browser token from being sent to /api/shop.
+    try{
+      const refreshed=await getClient().auth.refreshSession();
+      if(refreshed.error)throw refreshed.error;
+      if(refreshed.data?.user)user=refreshed.data.user;
+    }catch(e){
+      console.error('QarzniUz session refresh:',e);
+      throw new Error('Sessiya muddati tugagan. Iltimos, qayta kiring.');
     }
     // Resolve the server-side shop membership before opening the app.
     // This is the authoritative role check: OWNER gets a shop, SELLER must
@@ -100,7 +111,7 @@
       console.error('QarzniUz shop access:',e);
       try{await getClient().auth.signOut()}catch(_){}
       const sellerMsg='Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.';
-      status(role==='SELLER'?sellerMsg:(e?.message||'Do‘kon profilini yaratishda xatolik yuz berdi.'),false);
+      status(registrationRole==='SELLER'?sellerMsg:(e?.message||'Do‘kon profilini yaratishda xatolik yuz berdi.'),false);
       return;
     }
     const serverRole=String(membership.member?.role||'').toUpperCase();
