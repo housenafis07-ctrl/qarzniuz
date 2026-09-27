@@ -138,6 +138,10 @@ drop policy if exists qz_payments_insert on public.shop_payments;
 create policy qz_payments_insert on public.shop_payments for insert with check (public.qz_is_shop_member(shop_id) and created_by=auth.uid());
 drop policy if exists qz_audit_select on public.shop_audit_logs;
 create policy qz_audit_select on public.shop_audit_logs for select using (public.qz_is_shop_member(shop_id));
+drop policy if exists qz_audit_insert on public.shop_audit_logs;
+create policy qz_audit_insert on public.shop_audit_logs
+  for insert
+  with check (public.qz_is_shop_member(shop_id) and actor_user_id=auth.uid());
 
 -- Sellers do not delete historical debts/payments/audit records.
 -- Owner corrections should use status changes plus an audit record.
