@@ -10,7 +10,11 @@ SUPABASE_URL = os.environ.get(
     "SUPABASE_URL", "https://yzicsoyufdghwiezqjsa.supabase.co"
 ).rstrip("/")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_ANON_KEY = os.environ.get(
+    "SUPABASE_ANON_KEY",
+    "sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM",
+)
+REQUEST_ACCESS_TOKEN = ""
 
 
 def send_json(h, body, status=200):
@@ -35,7 +39,7 @@ def auth_user(h):
     access = token.split(" ", 1)[1].strip()
     key = SUPABASE_ANON_KEY or SUPABASE_SERVICE_KEY
     if not access or not key:
-        raise PermissionError("Auth server sozlanmagan")
+        raise PermissionError("Supabase Auth konfiguratsiyasi topilmadi")
 
     req = urllib.request.Request(SUPABASE_URL + "/auth/v1/user", method="GET")
     req.add_header("apikey", key)
@@ -47,19 +51,26 @@ def auth_user(h):
         raise PermissionError("Sessiya yaroqsiz yoki muddati tugagan")
     if not user.get("id"):
         raise PermissionError("Foydalanuvchi aniqlanmadi")
+    global REQUEST_ACCESS_TOKEN
+    REQUEST_ACCESS_TOKEN = access
     return user
 
 
 def rest(method, table, query=None, body=None, prefer=None):
-    if not SUPABASE_SERVICE_KEY:
-        raise RuntimeError("SUPABASE_SERVICE_KEY sozlanmagan")
+    # Production should use the service-role key. If it is not configured,
+    # fall back to the authenticated user's JWT so Supabase RLS remains in control.
+    use_service = bool(SUPABASE_SERVICE_KEY)
+    key = SUPABASE_SERVICE_KEY if use_service else SUPABASE_ANON_KEY
+    bearer = SUPABASE_SERVICE_KEY if use_service else REQUEST_ACCESS_TOKEN
+    if not key or not bearer:
+        raise RuntimeError("Supabase server konfiguratsiyasi to‘liq emas")
     url = SUPABASE_URL + "/rest/v1/" + table
     if query:
         url += "?" + urllib.parse.urlencode(query, doseq=True)
     raw = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=raw, method=method)
-    req.add_header("apikey", SUPABASE_SERVICE_KEY)
-    req.add_header("Authorization", "Bearer " + SUPABASE_SERVICE_KEY)
+    req.add_header("apikey", key)
+    req.add_header("Authorization", "Bearer " + bearer)
     req.add_header("Content-Type", "application/json")
     req.add_header("Accept", "application/json")
     req.add_header(
