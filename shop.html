@@ -17,7 +17,22 @@ const SUPABASE_URL='https://yzicsoyufdghwiezqjsa.supabase.co',SUPABASE_ANON_KEY=
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),money=n=>new Intl.NumberFormat('uz-UZ').format(Number(n||0))+' so‘m',customerName=id=>data.customers.find(x=>x.id===id)?.full_name||'—';
 function toast(s){const e=document.getElementById('toast');e.textContent=s;e.style.display='block';clearTimeout(window._t);window._t=setTimeout(()=>e.style.display='none',2600)}
 async function api(path,body){const {data:{session}}=await sb.auth.getSession();if(!session)throw Error('Sessiya yo‘q');const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:body?JSON.stringify(body):undefined,cache:'no-store'}),j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Xatolik');return j.data}
-async function start(){const {data:{session}}=await sb.auth.getSession();if(!session){document.getElementById('login').classList.remove('hidden');return}try{ctx=await api('/api/shop?action=bootstrap');await migrateLegacyData();document.getElementById('app').classList.remove('hidden');document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';buildNav();await loadData();show('dashboard')}catch(e){document.getElementById('login').classList.remove('hidden');toast(e.message)}}
+async function start(){
+  let {data:{session}}=await sb.auth.getSession();
+  if(!session){
+    try{
+      const raw=sessionStorage.getItem('qarzniuz_shop_session');
+      if(raw){
+        const saved=JSON.parse(raw);
+        if(saved?.access_token){
+          const set=await sb.auth.setSession({access_token:saved.access_token,refresh_token:saved.refresh_token||''});
+          session=set.data?.session||null;
+          if(session)sessionStorage.removeItem('qarzniuz_shop_session');
+        }
+      }
+    }catch(e){console.warn('shop session handoff:',e)}
+  }
+  if(!session){document.getElementById('login').classList.remove('hidden');return}try{ctx=await api('/api/shop?action=bootstrap');await migrateLegacyData();document.getElementById('app').classList.remove('hidden');document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';document.getElementById('role').textContent=ctx.member.role==='OWNER'?'OWNER — EGASI':'SELLER — SOTUVCHI';buildNav();await loadData();show('dashboard')}catch(e){document.getElementById('login').classList.remove('hidden');toast(e.message)}}
 function buildNav(){let a=[['dashboard','Dashboard'],['customers','Mijozlar'],['debts','Qarzdorlar'],['payments','To‘lovlar']];if(ctx.member.role==='OWNER')a.push(['sellers','Sotuvchilar'],['reports','Hisobotlar'],['audit','Audit tarixi'],['export','Export / Backup'],['settings','Sozlamalar']);else a.push(['activity','Mening faoliyatim']);document.getElementById('nav').innerHTML=a.map(x=>'<button id="n-'+x[0]+'" onclick="show(\''+x[0]+'\')">'+x[1]+'</button>').join('')}
 async function migrateLegacyData(){
   if(!ctx?.user?.id)return false;
