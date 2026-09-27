@@ -184,11 +184,22 @@
 
             <div id="reg-fields" style="display: none;">
                 <div class="form-group">
+                    <label>Kim sifatida ro‘yxatdan o‘tasiz?</label>
+                    <div id="auth-role-choice" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <button type="button" id="role-owner-btn" class="btn" style="padding:11px;background:#2563eb;" onclick="setRegistrationRole('OWNER')">🏪 Do‘kon egasi</button>
+                        <button type="button" id="role-seller-btn" class="btn" style="padding:11px;background:#e2e8f0;color:#334155;" onclick="setRegistrationRole('SELLER')">👤 Sotuvchi</button>
+                    </div>
+                    <input type="hidden" id="auth-role" value="OWNER">
+                    <div id="seller-role-hint" style="display:none;margin-top:8px;padding:9px 11px;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:12px;line-height:1.45;">
+                        Sotuvchi uchun do‘kon nomi kerak emas. SMS tasdiqlashdan keyin tizim telefon raqamingiz bo‘yicha sizni egasi belgilagan do‘konga ulaydi.
+                    </div>
+                </div>
+                <div class="form-group">
                     <label id="lbl-name">Ismingiz</label>
                     <input type="text" id="auth-name" placeholder="Masalan: Elbek">
                 </div>
-                <div class="form-group">
-                    <label id="lbl-shop">Do'kon nomi</label>
+                <div class="form-group" id="auth-shop-group">
+                    <label id="lbl-shop">Do‘kon nomi</label>
                     <input type="text" id="auth-shop" placeholder="Masalan: Baraka Market">
                 </div>
             </div>
@@ -766,6 +777,28 @@
             }
         }
 
+        function setRegistrationRole(role) {
+            role = role === 'SELLER' ? 'SELLER' : 'OWNER';
+            const input = document.getElementById('auth-role');
+            const ownerBtn = document.getElementById('role-owner-btn');
+            const sellerBtn = document.getElementById('role-seller-btn');
+            const shopGroup = document.getElementById('auth-shop-group');
+            const shopInput = document.getElementById('auth-shop');
+            const hint = document.getElementById('seller-role-hint');
+            if (input) input.value = role;
+            if (ownerBtn) {
+                ownerBtn.style.background = role === 'OWNER' ? '#2563eb' : '#e2e8f0';
+                ownerBtn.style.color = role === 'OWNER' ? '#fff' : '#334155';
+            }
+            if (sellerBtn) {
+                sellerBtn.style.background = role === 'SELLER' ? '#2563eb' : '#e2e8f0';
+                sellerBtn.style.color = role === 'SELLER' ? '#fff' : '#334155';
+            }
+            if (shopGroup) shopGroup.style.display = role === 'OWNER' ? 'block' : 'none';
+            if (shopInput) shopInput.required = role === 'OWNER';
+            if (hint) hint.style.display = role === 'SELLER' ? 'block' : 'none';
+        }
+
         function switchAuthMode(mode) {
             authMode = mode;
             const regFields = document.getElementById('reg-fields');
@@ -784,7 +817,7 @@
                 btnReg.style.background = "#2563eb";
                 btnLogin.style.background = "#64748b";
                 document.getElementById('auth-name').required = true;
-                document.getElementById('auth-shop').required = true;
+                setRegistrationRole(document.getElementById('auth-role')?.value || 'OWNER');
             } else {
                 regFields.style.display = 'none';
                 submitBtn.innerText = t.btnLoginMode;
