@@ -88,11 +88,27 @@ async function migrateLegacyData(){
   if(!phone)return false;
   let legacy=null;
   try{legacy=JSON.parse(localStorage.getItem('shop_debts_'+phone)||'null')}catch(_){legacy=null}
-  if(!Array.isArray(legacy)||!legacy.length)return false;
-  const result=await api('/api/shop',{action:'legacy_import',customers:legacy});
-  localStorage.setItem(marker,'1');
-  toast(result.imported+' ta eski mijoz ma\'lumoti yangi tizimga ko\'chirildi');
-  return true;
+  if(!Array.isArray(legacy)||!legacy.length){localStorage.setItem(marker,'1');return false}
+  // Legacy data belongs to the old per-phone browser store. Import it only when
+  // the shared shop is still empty; another seller must never be blocked because
+  // the Owner (or another seller) has already populated the shared database.
+  if(Number(ctx.dashboard?.customers||0)>0){
+    localStorage.setItem(marker,'1');
+    return false;
+  }
+  try{
+    const result=await api('/api/shop',{action:'legacy_import',customers:legacy});
+    localStorage.setItem(marker,'1');
+    toast(result.imported+' ta eski mijoz ma\'lumoti yangi tizimga ko\'chirildi');
+    return true;
+  }catch(e){
+    const msg=String(e?.message||'');
+    if(/allaqachon yangi ma'lumotlar mavjud/i.test(msg)){
+      localStorage.setItem(marker,'1');
+      return false;
+    }
+    throw e;
+  }
 }
 async function loadData(){data=await api('/api/shop?action=data')}
 function activeNav(){document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));document.getElementById('n-'+current)?.classList.add('active')}
