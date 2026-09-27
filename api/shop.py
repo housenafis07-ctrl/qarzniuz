@@ -284,6 +284,104 @@ def payload(shop_id, members):
     return customers, debts, payments
 
 
+def parse_legacy_date(value):
+    s = str(value or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def import_legacy_customers(shop_id, user_id, actor_name, legacy):
+    if not isinstance(legacy, list):
+        raise RuntimeError("Eski ma'lumotlar formati noto'g'ri")
+
+    existing = shop_rows("shop_customers", shop_id)
+    if existing:
+        raise RuntimeError("Do'konda allaqachon yangi ma'lumotlar mavjud; avtomatik import to'xtatildi")
+
+    imported = 0
+    for old in legacy[:5000]:
+        name = str(old.get("name") or "").strip()[:160]
+        if not name:
+            continue
+
+        customer = rest(
+            "POST",
+            "shop_customers",
+            {
+                "shop_id": shop_id,
+                "full_name": name,
+                "phone": normalize_phone(old.get("phone", "")) or None,
+                "note": str(old.get("note") or "").strip()[:500] or None,
+                "status": "archived" if old.get("archived") else "active",
+                "created_by": user_id,
+                "created_at": parse_legacy_date(old.get("dateGiven")) or datetime.now(timezone.utc).isoformat(),
+            },
+        )[0]
+
+        history = old.get("history") if isinstance(old.get("history"), list) else []
+        if not history and float(old.get("amount") or 0) > 0:
+            history = [{
+                "date": old.get("dateGiven"),
+                "type": "Dastlabki qarz",
+                "amount": old.get("amount"),
+                "item": old.get("note") or "Eski qarz",
+            }]
+
+        for event in history:
+            try:
+                amount = float(event.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                continue
+
+            event_type = str(event.get("type") or "").lower()
+            event_date = parse_legacy_date(event.get("date"))
+            is_payment = ("to'lov" in event_type) or ("to‘lov" in event_type) or ("to'liq" in event_type) or ("to‘liq" in event_type)
+
+            if is_payment:
+                row = rest(
+                    "POST",
+                    "shop_payments",
+                    {
+                        "shop_id": shop_id,
+                        "customer_id": customer["id"],
+                        "amount": amount,
+                        "note": str(event.get("item") or "Eski to'lov")[:500],
+                        "status": "recorded",
+                        "created_by": user_id,
+                        **({"created_at": event_date} if event_date else {}),
+                    },
+                )[0]
+                audit(shop_id, user_id, actor_name, "IMPORT", "PAYMENT", row["id"], None, row)
+            else:
+                row = rest(
+                    "POST",
+                    "shop_debts",
+                    {
+                        "shop_id": shop_id,
+                        "customer_id": customer["id"],
+                        "amount": amount,
+                        "note": str(event.get("item") or "Eski qarz")[:500],
+                        "status": "active",
+                        "created_by": user_id,
+                        **({"created_at": event_date} if event_date else {}),
+                    },
+                )[0]
+                audit(shop_id, user_id, actor_name, "IMPORT", "DEBT", row["id"], None, row)
+
+        audit(shop_id, user_id, actor_name, "IMPORT", "CUSTOMER", customer["id"], None, customer)
+        imported += 1
+
+    return imported
+
+
 def customer_balance(shop_id, customer_id):
     customers = shop_rows("shop_customers", shop_id)
     debts = shop_rows("shop_debts", shop_id)
@@ -321,6 +419,17 @@ class handler(BaseHTTPRequestHandler):
             user, member, shop = require_context(self)
             body = read_json(self)
             action = str(body.get("action", "")).lower()
+            if action == "legacy_import":
+                if member["role"] not in ("OWNER", "SELLER"):
+                    raise PermissionError("Do'kon a'zoligi talab qilinadi")
+                count = import_legacy_customers(
+                    shop["id"],
+                    user["id"],
+                    member.get("full_name") or "Foydalanuvchi",
+                    body.get("customers"),
+                )
+                send_json(self, {"ok": True, "data": {"imported": count}})
+                return
             if action == "customer_create":
                 name = str(body.get("full_name", "")).strip()[:160]
                 if not name:
