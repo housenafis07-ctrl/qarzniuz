@@ -29,6 +29,10 @@
       const r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
       const j=await r.json().catch(()=>({}));
       if(!r.ok||!j.ok) throw new Error(j.error||'Do‘kon panelini ochib bo‘lmadi');
+      sessionStorage.setItem('qarzniuz_shop_session', JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token || null
+      }));
       window.location.href='/shop.html';
       return true;
     }catch(e){
