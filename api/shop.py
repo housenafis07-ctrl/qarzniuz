@@ -222,6 +222,11 @@ def bootstrap(user):
         )[0]
         return member, shop
 
+    # Seller registration is never allowed to create a new shop.
+    # The owner must first invite this exact phone number.
+    if str(meta.get("qz_registration_intent") or "").upper() == "SELLER":
+        raise PermissionError("Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.")
+
     # Existing membership is used for normal login.
     existing = member_for(user)
     if existing:
