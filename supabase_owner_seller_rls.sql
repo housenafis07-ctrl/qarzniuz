@@ -48,7 +48,15 @@ for select using (user_id = auth.uid() or public.qz_shop_role(shop_id) = 'OWNER'
 drop policy if exists qz_shop_members_insert on public.shop_members;
 create policy qz_shop_members_insert on public.shop_members
 for insert with check (
-  (role = 'OWNER' and user_id = auth.uid() and public.qz_shop_role(shop_id) = 'OWNER')
+  (
+    role = 'OWNER'
+    and user_id = auth.uid()
+    and exists (
+      select 1 from public.shops s
+      where s.id = shop_members.shop_id
+        and s.owner_id = auth.uid()
+    )
+  )
   or (role = 'SELLER' and public.qz_shop_role(shop_id) = 'OWNER')
 );
 
