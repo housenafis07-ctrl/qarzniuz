@@ -154,6 +154,21 @@ def bootstrap(user):
         {"owner_id": "eq." + uid, "select": "*", "order": "created_at.asc", "limit": "1"},
     )
     if owned:
+        # If this is a fresh Owner registration and a legacy/default shop already
+        # exists for the same account, keep the existing shop/data but apply the
+        # requested shop name instead of silently showing "Mening Do'konim".
+        requested_shop_name = str(meta.get("shop_name") or "").strip()[:160]
+        if str(meta.get("qz_registration_intent") or "").upper() == "OWNER" and requested_shop_name:
+            current_name = str(owned.get("name") or "").strip()
+            if requested_shop_name != current_name:
+                updated_shop = rest(
+                    "PATCH",
+                    "shops",
+                    {"id": "eq." + owned["id"]},
+                    {"name": requested_shop_name},
+                )
+                if updated_shop:
+                    owned = updated_shop[0]
         members = rest(
             "GET",
             "shop_members",
@@ -589,7 +604,13 @@ class handler(BaseHTTPRequestHandler):
                 if exists and exists.get("status") != "disabled":
                     raise RuntimeError("Bu telefon allaqachon do'konga ulangan yoki taklif qilingan")
                 if exists:
-                    row = rest("PATCH", "shop_members", {"id": "eq." + exists["id"]}, {"full_name": name, "status": "pending", "role": "SELLER", "user_id": None, "invited_by": user["id"]})[0]
+                    # Keep an already-linked auth user intact when re-inviting an
+                    # existing disabled seller. Pending invitations normally have
+                    # user_id NULL; the DB migration makes that explicit.
+                    patch = {"full_name": name, "status": "pending", "role": "SELLER", "invited_by": user["id"]}
+                    if exists.get("status") == "disabled":
+                        patch["user_id"] = None
+                    row = rest("PATCH", "shop_members", {"id": "eq." + exists["id"]}, patch)[0]
                 else:
                     row = rest("POST", "shop_members", {"shop_id": shop["id"], "phone": phone, "full_name": name, "role": "SELLER", "status": "pending", "invited_by": user["id"]})[0]
                 audit(shop["id"], user["id"], member["full_name"], "INVITE", "SELLER", row["id"], None, row)
