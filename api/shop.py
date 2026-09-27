@@ -3,6 +3,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 
@@ -14,7 +15,7 @@ SUPABASE_ANON_KEY = os.environ.get(
     "SUPABASE_ANON_KEY",
     "sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM",
 )
-REQUEST_ACCESS_TOKEN = ""
+REQUEST_ACCESS_TOKEN = ContextVar("request_access_token", default="")
 
 
 def send_json(h, body, status=200):
@@ -51,8 +52,7 @@ def auth_user(h):
         raise PermissionError("Sessiya yaroqsiz yoki muddati tugagan")
     if not user.get("id"):
         raise PermissionError("Foydalanuvchi aniqlanmadi")
-    global REQUEST_ACCESS_TOKEN
-    REQUEST_ACCESS_TOKEN = access
+    REQUEST_ACCESS_TOKEN.set(access)
     return user
 
 
@@ -61,7 +61,7 @@ def rest(method, table, query=None, body=None, prefer=None):
     # fall back to the authenticated user's JWT so Supabase RLS remains in control.
     use_service = bool(SUPABASE_SERVICE_KEY)
     key = SUPABASE_SERVICE_KEY if use_service else SUPABASE_ANON_KEY
-    bearer = SUPABASE_SERVICE_KEY if use_service else REQUEST_ACCESS_TOKEN
+    bearer = SUPABASE_SERVICE_KEY if use_service else REQUEST_ACCESS_TOKEN.get()
     if not key or not bearer:
         raise RuntimeError("Supabase server konfiguratsiyasi to‘liq emas")
     url = SUPABASE_URL + "/rest/v1/" + table
