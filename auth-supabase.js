@@ -142,6 +142,9 @@
       form.addEventListener('submit',function(e){
         e.preventDefault();
         e.stopImmediatePropagation();
+        if(busy)return;
+        if(mode()==='login') loginWithPin();
+        else sendRegistrationOtp();
       },true);
       form.dataset.qzCaptureGuard='1';
     }
