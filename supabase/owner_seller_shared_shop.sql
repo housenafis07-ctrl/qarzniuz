@@ -23,6 +23,11 @@ create table if not exists public.shop_members (
   updated_at timestamptz not null default now(),
   unique(shop_id, phone)
 );
+
+-- A seller invitation is created before the seller has a Supabase Auth user.
+-- Therefore user_id must be nullable until the invited seller verifies/registers.
+alter table if exists public.shop_members alter column user_id drop not null;
+
 create unique index if not exists shop_members_user_unique on public.shop_members(shop_id, user_id) where user_id is not null;
 
 create table if not exists public.shop_customers (
