@@ -132,11 +132,19 @@
     form.onsubmit=function(e){
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       if(busy)return;
       if(mode()==='login') loginWithPin();
       else sendRegistrationOtp();
       return false;
     };
+    if(!form.dataset.qzCaptureGuard){
+      form.addEventListener('submit',function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      },true);
+      form.dataset.qzCaptureGuard='1';
+    }
   }
   function installSubmitGuard(){}
   function boot(){
