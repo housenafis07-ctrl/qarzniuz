@@ -128,7 +128,14 @@ def member_for(user):
     if phone:
         pending = one(
             "shop_members",
-            {"phone": "eq." + phone, "status": "eq.pending", "select": "*", "limit": "1"},
+            {
+                "phone": "eq." + phone,
+                "role": "eq.SELLER",
+                "user_id": "is.null",
+                "status": "in.(pending,active)",
+                "select": "*",
+                "limit": "1",
+            },
         )
         if pending:
             updated = rest(
@@ -203,7 +210,14 @@ def bootstrap(user):
     if phone:
         pending = one(
             "shop_members",
-            {"phone": "eq." + phone, "status": "eq.pending", "select": "*", "limit": "1"},
+            {
+                "phone": "eq." + phone,
+                "role": "eq.SELLER",
+                "user_id": "is.null",
+                "status": "in.(pending,active)",
+                "select": "*",
+                "limit": "1",
+            },
         )
         if pending:
             updated = rest(
@@ -601,7 +615,9 @@ class handler(BaseHTTPRequestHandler):
                 if not name or not phone:
                     raise RuntimeError("Sotuvchi ismi va telefoni kerak")
                 exists = one("shop_members", {"shop_id": "eq." + shop["id"], "phone": "eq." + phone, "select": "*", "limit": "1"})
-                if exists and exists.get("status") != "disabled":
+                # A legacy/broken invitation may be active but still have no auth user.
+                # Treat it as reusable pending invitation instead of blocking the seller.
+                if exists and exists.get("status") != "disabled" and exists.get("user_id"):
                     raise RuntimeError("Bu telefon allaqachon do'konga ulangan yoki taklif qilingan")
                 if exists:
                     # Keep an already-linked auth user intact when re-inviting an
