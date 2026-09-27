@@ -1116,6 +1116,16 @@
             }
         }
 
+        function openShopPanel(user) {
+            if (!user) {
+                alert("Avval tizimga kiring.");
+                return;
+            }
+            // Supabase session is persisted by auth-supabase.js.
+            // Open the shared-shop panel in the same origin so the session is reused.
+            window.location.href = '/shop.html';
+        }
+
         function sendSMS(phone, name, amount, dateDue) {
             const shopName = currentUser ? currentUser.shopName : "Do'konimiz";
             const msg = `"${shopName}": Xurmatli ${name}, qarzingiz: ${amount.toLocaleString()} so'm. Muddati: ${dateDue}.`;
