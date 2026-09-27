@@ -207,7 +207,7 @@
         <div style="display: flex; gap: 6px; align-items: center;">
             <button class="lang-switch" onclick="toggleLanguage()"><span id="lang-btn-text">🌐 RU</span></button>
             <button id="install-btn" onclick="showHomeScreenHelp()" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px;">📱</button>
-            <button type="button" onclick="openShopPanel(currentUser)" style="background:white; color:#2563eb; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">🏪 Do‘kon boshqaruvi</button>
+            <button id="shop-management-btn" type="button" onclick="openShopPanel(currentUser)" style="display:none;background:white; color:#2563eb; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">🏪 Do‘kon boshqaruvi</button>
             <button onclick="logoutApp()" style="background:#ef4444; color:white; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;" id="btn-logout">🚪 Chiqish</button>
         </div>
     </header>
@@ -1116,7 +1116,13 @@
             }
         }
 
-        function openShopPanel(user) {
+        function updateShopManagementVisibility(user){
+  const btn=document.getElementById('shop-management-btn');
+  if(!btn)return;
+  const role=String(user?.role||user?.shopRole||localStorage.getItem('qarzniuz_role')||'').toUpperCase();
+  btn.style.display=role==='OWNER'?'inline-block':'none';
+}
+function openShopPanel(user) {
             if (!user) {
                 alert("Avval tizimga kiring.");
                 return;
