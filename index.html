@@ -757,7 +757,7 @@
                 // the familiar main debt app; seller data is synchronized with the
                 // same shared shop database.
                 const sharedRole = String(currentUser.role || currentUser.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
-                if (sharedRole === 'OWNER') {
+                if (sharedRole === 'OWNER' && new URLSearchParams(location.search).get('main') !== '1') {
                     window.location.replace('/shop.html');
                     return;
                 }
@@ -766,7 +766,7 @@
 
                 const userDebtsKey = 'shop_debts_' + currentUser.phone;
                 const roleNow = String(currentUser.role || currentUser.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
-                if (roleNow === 'SELLER') {
+                if (roleNow === 'OWNER' || roleNow === 'SELLER') {
                     try { await loadSharedSellerData(); }
                     catch(e) { console.error(e); customers=[]; alert('Umumiy do‘kon ma’lumotlarini yuklab bo‘lmadi: '+(e?.message||'Noma’lum xato')); }
                 } else {
