@@ -327,6 +327,35 @@
         </div>
     </div>
 
+    <!-- SELLER PROFIL -->
+    <div id="tab-profile" class="tab-content">
+        <div class="container">
+            <div class="stats-card">
+                <h3>👤 MENING PROFILIM</h3>
+                <div id="seller-profile-summary" style="margin-top:8px;line-height:1.6;"></div>
+            </div>
+            <div class="container" style="padding:0;">
+                <div style="background:white;padding:15px;border-radius:10px;margin-bottom:12px;border:1px solid #cbd5e1;">
+                    <h3 style="margin-bottom:10px;">👤 Mening ma'lumotlarim</h3>
+                    <div id="seller-profile-info" style="line-height:1.8;color:#475569;"></div>
+                </div>
+                <div style="background:white;padding:15px;border-radius:10px;margin-bottom:12px;border:1px solid #cbd5e1;">
+                    <h3 style="margin-bottom:10px;">📋 Do‘kon qarzdorlari</h3>
+                    <div style="font-size:12px;color:#64748b;margin-bottom:8px;">Barcha sotuvchilar bilan bir xil umumiy qarzdorlar ro‘yxati.</div>
+                    <div id="seller-profile-debtors" style="overflow:auto;"></div>
+                </div>
+                <div style="background:white;padding:15px;border-radius:10px;margin-bottom:12px;border:1px solid #cbd5e1;">
+                    <h3 style="margin-bottom:10px;">🕒 O‘zgarishlar tarixi</h3>
+                    <div style="font-size:12px;color:#64748b;margin-bottom:8px;">Kim, qachon va nima o‘zgartirgani.</div>
+                    <div id="seller-profile-audit" style="overflow:auto;"></div>
+                    <button class="btn btn-success" style="margin-top:10px;" onclick="downloadSellerProfileExcel()">📊 Excelga yuklash</button>
+                </div>
+                <button class="btn btn-secondary" onclick="changeSellerPin()">🔐 PIN-kodni o‘zgartirish</button>
+                <button class="btn" style="background:#ef4444;margin-top:8px;" onclick="logoutApp()">🚪 Chiqish</button>
+            </div>
+        </div>
+    </div>
+
     <!-- BATAFSIL MODAL OYNASI -->
     <div id="customer-modal" class="modal">
         <div class="modal-content">
@@ -361,6 +390,10 @@
         <button class="tab-btn" id="btn-tab-pro">
             <span style="font-size: 20px;">⭐</span>
             <span id="tab-label-pro">Premium</span>
+        </button>
+        <button class="tab-btn" id="btn-tab-profile" style="display:none;">
+            <span style="font-size: 20px;">👤</span>
+            <span>Profil</span>
         </button>
     </div>
 
@@ -746,8 +779,68 @@
 
         const authScreen = document.getElementById('auth-screen');
 
+        function setupRoleUI() {
+            const role = String(currentUser?.role || currentUser?.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
+            const profileBtn = document.getElementById('btn-tab-profile');
+            const proBtn = document.getElementById('btn-tab-pro');
+            if (role === 'SELLER') {
+                if (profileBtn) profileBtn.style.display = '';
+                if (proBtn) proBtn.style.display = 'none';
+            } else {
+                if (profileBtn) profileBtn.style.display = 'none';
+                if (proBtn) proBtn.style.display = '';
+            }
+        }
+
+        async function renderSellerProfile() {
+            try {
+                const p = await sellerApi('/api/shop?action=seller_report');
+                const m = p.member || {};
+                const customers = p.customers || [];
+                const debts = p.debts || [];
+                const payments = p.payments || [];
+                const audit = p.audit || [];
+                document.getElementById('seller-profile-summary').innerHTML =
+                    '🟢 Faol · <b>' + esc(m.full_name || currentUser?.name || '—') + '</b> · ' + esc(p.shop?.name || currentUser?.shopName || '—');
+                document.getElementById('seller-profile-info').innerHTML =
+                    '<b>Ism:</b> '+esc(m.full_name||currentUser?.name||'—')+'<br>'+
+                    '<b>Telefon:</b> '+esc(m.phone||currentUser?.phone||'—')+'<br>'+
+                    '<b>Rol:</b> Sotuvchi<br>'+
+                    '<b>Do‘kon:</b> '+esc(p.shop?.name||'—')+'<br>'+
+                    '<b>Holat:</b> 🟢 '+esc(m.status||'active');
+                const active = customers.filter(x=>Number(x.balance||0)>0.009);
+                document.getElementById('seller-profile-debtors').innerHTML =
+                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Mijoz</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Qoldiq</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Oxirgi amal</th></tr>'+
+                    active.map(x=>{const d=debts.filter(y=>y.customer_id===x.id).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; const pp=payments.filter(y=>y.customer_id===x.id).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; const last=[d,pp].filter(Boolean).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; return '<tr><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.full_name||'—')+'</td><td style="padding:7px;border-bottom:1px solid #eee;color:#dc2626;font-weight:700">'+Number(x.balance||0).toLocaleString()+' so‘m</td><td style="padding:7px;border-bottom:1px solid #eee">'+(last?esc(String(last.created_at||'').replace('T',' ').slice(0,16)):'—')+'</td></tr>'}).join('')+
+                    '</table>';
+                document.getElementById('seller-profile-audit').innerHTML =
+                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Vaqt</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Kim</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Amal</th></tr>'+
+                    audit.map(x=>'<tr><td style="padding:7px;border-bottom:1px solid #eee">'+esc(String(x.created_at||'').replace('T',' ').slice(0,16))+'</td><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.actor_name||x.actor_user_id||'—')+'</td><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.action||'—')+'</td></tr>').join('')+'</table>';
+                window.__sellerProfileReport=p;
+            } catch(e) { alert(e.message||'Profilni yuklab bo‘lmadi'); }
+        }
+
+        function downloadSellerProfileExcel() {
+            const p=window.__sellerProfileReport;
+            if(!p){ alert('Avval Profil bo‘limini oching.'); return; }
+            const rows=[['QarzniUz — Sotuvchi hisoboti'],['Do‘kon',p.shop?.name||''],['Sotuvchi',p.member?.full_name||''],['Telefon',p.member?.phone||''],[],['QARZDORLAR'],['Mijoz','Qoldiq'],...(p.customers||[]).filter(x=>Number(x.balance||0)>0.009).map(x=>[x.full_name||'',Number(x.balance||0)]),[],['OZGARISHLAR TARIXI'],['Vaqt','Kim','Amal','Obyekt','ID'],...(p.audit||[]).map(x=>[x.created_at||'',x.actor_name||x.actor_user_id||'',x.action||'',x.entity_type||'',x.entity_id||''])];
+            const html='<table border="1">'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</table>';
+            const blob=new Blob(['\\ufeff'+html],{type:'application/vnd.ms-excel'});
+            const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='qarzniuz-sotuvchi-hisobot-'+new Date().toISOString().slice(0,10)+'.xls';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+        }
+
+        async function changeSellerPin() {
+            const pin=prompt('Yangi 4 xonali PIN-kodni kiriting:');
+            if(!/^\d{4}$/.test(pin||'')){alert('PIN 4 xonali bo‘lishi kerak.');return;}
+            const pin2=prompt('PIN-kodni yana kiriting:');
+            if(pin!==pin2){alert('PIN kodlar mos kelmadi.');return;}
+            if(window.QarzniUzAuth?.setPinForCurrentUser){await window.QarzniUzAuth.setPinForCurrentUser(pin);alert('PIN-kod o‘zgartirildi.');}
+            else alert('PIN o‘zgartirish funksiyasi mavjud emas.');
+        }
+
         async function initApp() {
             setLanguage(currentLang);
+            setupRoleUI();
             updateShopManagementVisibility(currentUser);
             if (!currentUser) {
                 authScreen.style.display = 'flex';
@@ -949,6 +1042,7 @@
         document.getElementById('btn-tab-list').addEventListener('click', function() { switchTab('list', this); });
         document.getElementById('btn-tab-add').addEventListener('click', function() { switchTab('add', this); });
         document.getElementById('btn-tab-pro').addEventListener('click', function() { switchTab('pro', this); });
+        document.getElementById('btn-tab-profile').addEventListener('click', function() { switchTab('profile', this); });
 
         function switchTab(tabName, btnEl) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -959,6 +1053,7 @@
 
             if (tabName === 'list') renderCustomers();
             if (tabName === 'pro') { renderProStatus(); updateLastBackupNote(); }
+            if (tabName === 'profile') renderSellerProfile();
         }
 
         document.getElementById('cust-date-given').valueAsDate = new Date();
@@ -968,7 +1063,7 @@
             const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
             const activeCount = customers.filter(c => !c.archived).length;
 
-            if (!isPro && activeCount >= 5) {
+            if (!sharedSeller && !isPro && activeCount >= 5) {
                 alert(L('alertLimitReached'));
                 switchTab('pro', document.getElementById('btn-tab-pro'));
                 return;
