@@ -746,18 +746,18 @@
 
         const authScreen = document.getElementById('auth-screen');
 
-        function initApp() {
+        async function initApp() {
             setLanguage(currentLang);
             updateShopManagementVisibility(currentUser);
             if (!currentUser) {
                 authScreen.style.display = 'flex';
                 customers = [];
             } else {
-                // Owner/Seller accounts now use the shared-shop database.
-                // Do not open the old phone-localStorage debt screen, otherwise
-                // debts entered here are invisible to other employees.
+                // Owner uses the management panel with Dashboard. Seller stays in
+                // the familiar main debt app; seller data is synchronized with the
+                // same shared shop database.
                 const sharedRole = String(currentUser.role || currentUser.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
-                if (sharedRole === 'OWNER' || sharedRole === 'SELLER') {
+                if (sharedRole === 'OWNER') {
                     window.location.replace('/shop.html');
                     return;
                 }
@@ -765,7 +765,13 @@
                 document.getElementById('header-shop-name').innerText = currentUser.shopName || "Qarzdorlar Daftari";
 
                 const userDebtsKey = 'shop_debts_' + currentUser.phone;
-                customers = JSON.parse(localStorage.getItem(userDebtsKey)) || [];
+                const roleNow = String(currentUser.role || currentUser.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
+                if (roleNow === 'SELLER') {
+                    try { await loadSharedSellerData(); }
+                    catch(e) { console.error(e); customers=[]; alert('Umumiy do‘kon ma’lumotlarini yuklab bo‘lmadi: '+(e?.message||'Noma’lum xato')); }
+                } else {
+                    customers = JSON.parse(localStorage.getItem(userDebtsKey)) || [];
+                }
 
                 if (!localStorage.getItem('trial_given_' + currentUser.phone)) {
                     const trialExpire = new Date();
@@ -782,10 +788,39 @@
             }
         }
 
+        let sharedSeller = false;
+        let sharedSellerShop = null;
+        function sellerSupabaseClient(){return window.supabase.createClient('https://yzicsoyufdghwiezqjsa.supabase.co','sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM',{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});}
+        async function sellerApi(path,body){
+            const client=sellerSupabaseClient();
+            let {data:{session}}=await client.auth.getSession();
+            if(!session)throw Error('Sessiya topilmadi. Qayta kiring.');
+            const req=async s=>{const r=await fetch(path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.access_token},body:body?JSON.stringify(body):undefined,cache:'no-store'});const j=await r.json().catch(()=>({}));return{r,j}};
+            let x=await req(session);
+            if(x.r.status===401){const z=await client.auth.refreshSession();if(z.data?.session)x=await req(z.data.session);}
+            if(!x.r.ok||!x.j.ok)throw Error(x.j.error||('Server xatosi ('+x.r.status+')'));
+            return x.j.data;
+        }
+        function mapSharedSellerData(p){
+            sharedSeller=true; sharedSellerShop=p.shop||null;
+            const cs=p.customers||[],ds=p.debts||[],ps=p.payments||[];
+            return cs.map((c,i)=>{
+                const debts=ds.filter(d=>d.customer_id===c.id), pays=ps.filter(x=>x.customer_id===c.id&&x.status==='recorded');
+                const history=[...debts.map(d=>({date:String(d.created_at||'').slice(0,10),type:'Dastlabki qarz',amount:Number(d.amount||0),item:d.note||'Dastlabki mahsulotlar'})),...pays.map(x=>({date:String(x.created_at||'').slice(0,10),type:"Qisman To'lov",amount:Number(x.amount||0),item:x.note||'To‘lov'}))];
+                history.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+                const lastDebt=debts.slice().sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0];
+                return{id:i+1,sharedId:c.id,name:c.full_name||'—',phone:c.phone||'',tgUsername:'',amount:Number(c.balance||0),dateGiven:debts[0]?String(debts[0].created_at).slice(0,10):String(c.created_at||'').slice(0,10),dateDue:lastDebt?.due_date||'',note:lastDebt?.note||c.note||'',archived:Number(c.balance||0)<=.009,history};
+            });
+        }
+        async function loadSharedSellerData(){
+            const p=await sellerApi('/api/shop?action=data');
+            customers=mapSharedSellerData(p);
+            if(p.shop?.name){currentUser.shopName=p.shop.name;const h=document.getElementById('header-shop-name');if(h)h.innerText=p.shop.name;}
+        }
+
         function saveCustomersToStorage() {
-            if (currentUser && currentUser.phone) {
-                localStorage.setItem('shop_debts_' + currentUser.phone, JSON.stringify(customers));
-            }
+            if (sharedSeller) return;
+            if (currentUser && currentUser.phone) localStorage.setItem('shop_debts_' + currentUser.phone, JSON.stringify(customers));
         }
 
         function setRegistrationRole(role) {
@@ -928,7 +963,7 @@
 
         document.getElementById('cust-date-given').valueAsDate = new Date();
 
-        document.getElementById('add-debt-form').addEventListener('submit', function(e) {
+        document.getElementById('add-debt-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             const isPro = localStorage.getItem('is_premium_user_' + currentUser.phone);
             const activeCount = customers.filter(c => !c.archived).length;
@@ -964,8 +999,15 @@
                 ]
             };
 
-            customers.push(newCustomer);
-            saveCustomersToStorage();
+            if(sharedSeller){
+                try{
+                    const created=await sellerApi('/api/shop',{action:'customer_create',full_name:newCustomer.name,phone:newCustomer.phone,note:newCustomer.note});
+                    await sellerApi('/api/shop',{action:'debt_create',customer_id:created.id,amount:newCustomer.amount,due_date:newCustomer.dateDue,note:newCustomer.note});
+                    await loadSharedSellerData();
+                }catch(e){alert(e.message||'Saqlashda xato');return;}
+            }else{
+                customers.push(newCustomer); saveCustomersToStorage();
+            }
             this.reset();
             document.getElementById('cust-date-given').valueAsDate = new Date();
             alert(L('alertDebtSaved'));
@@ -1100,7 +1142,7 @@
             document.getElementById('customer-modal').style.display = 'none';
         }
 
-        function payPartial(id) {
+        async function payPartial(id) {
             const customer = customers.find(c => c.id === id);
             if (!customer) return;
 
@@ -1120,7 +1162,8 @@
                     item: 'Naqd / Karta to\'lovi'
                 });
 
-                saveCustomersToStorage();
+                if(sharedSeller){try{await sellerApi('/api/shop',{action:'payment_create',customer_id:customer.sharedId,amount:paid,note:'Qisman to‘lov'});await loadSharedSellerData();}catch(e){alert(e.message||'To‘lov saqlanmadi');return;}}
+                else saveCustomersToStorage();
                 alert(L('alertPartialUpdated').replace('{amount}', customer.amount.toLocaleString()));
                 renderCustomers();
             } else if (paid > customer.amount) {
@@ -1128,7 +1171,7 @@
             }
         }
 
-        function addMoreDebt(id) {
+        async function addMoreDebt(id) {
             const customer = customers.find(c => c.id === id);
             if (!customer) return;
 
@@ -1150,13 +1193,14 @@
                     item: itemNote || L('itemNotSpecified')
                 });
 
-                saveCustomersToStorage();
+                if(sharedSeller){try{await sellerApi('/api/shop',{action:'debt_create',customer_id:customer.sharedId,amount:added,due_date:customer.dateDue,note:itemNote||'Qo‘shimcha qarz'});await loadSharedSellerData();}catch(e){alert(e.message||'Qarz saqlanmadi');return;}}
+                else saveCustomersToStorage();
                 alert(L('alertDebtAdded').replace('{amount}', customer.amount.toLocaleString()));
                 renderCustomers();
             }
         }
 
-        function payDebt(id) {
+        async function payDebt(id) {
             if (confirm(L('confirmPayFull'))) {
                 const customer = customers.find(c => c.id === id);
                 if (!customer) return;
@@ -1173,7 +1217,8 @@
                 customer.amount = 0;
                 customer.archived = true;
 
-                saveCustomersToStorage();
+                if(sharedSeller){try{await sellerApi('/api/shop',{action:'payment_create',customer_id:customer.sharedId,amount:customer.amount,note:'Qarz to‘liq yopildi'});await loadSharedSellerData();}catch(e){alert(e.message||'To‘lov saqlanmadi');return;}}
+                else saveCustomersToStorage();
                 alert(L('alertPayFullDone'));
                 renderCustomers();
             }
