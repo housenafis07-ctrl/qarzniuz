@@ -753,6 +753,14 @@
                 authScreen.style.display = 'flex';
                 customers = [];
             } else {
+                // Owner/Seller accounts now use the shared-shop database.
+                // Do not open the old phone-localStorage debt screen, otherwise
+                // debts entered here are invisible to other employees.
+                const sharedRole = String(currentUser.role || currentUser.shopRole || localStorage.getItem('qarzniuz_shop_role') || '').toUpperCase();
+                if (sharedRole === 'OWNER' || sharedRole === 'SELLER') {
+                    window.location.replace('/shop.html');
+                    return;
+                }
                 authScreen.style.display = 'none';
                 document.getElementById('header-shop-name').innerText = currentUser.shopName || "Qarzdorlar Daftari";
 
