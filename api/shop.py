@@ -1,0 +1,691 @@
+import json
+import os
+import urllib.error
+import urllib.parse
+import urllib.request
+from contextvars import ContextVar
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler
+
+SUPABASE_URL = os.environ.get(
+    "SUPABASE_URL", "https://yzicsoyufdghwiezqjsa.supabase.co"
+).rstrip("/")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_ANON_KEY = os.environ.get(
+    "SUPABASE_ANON_KEY",
+    "sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM",
+)
+REQUEST_ACCESS_TOKEN = ContextVar("request_access_token", default="")
+
+
+def send_json(h, body, status=200):
+    raw = json.dumps(body, ensure_ascii=False, default=str).encode("utf-8")
+    h.send_response(status)
+    h.send_header("Content-Type", "application/json; charset=utf-8")
+    h.send_header("Cache-Control", "no-store")
+    h.send_header("Content-Length", str(len(raw)))
+    h.end_headers()
+    h.wfile.write(raw)
+
+
+def read_json(h):
+    n = int(h.headers.get("Content-Length", "0"))
+    return json.loads((h.rfile.read(n) if n else b"{}").decode("utf-8"))
+
+
+def auth_user(h):
+    token = h.headers.get("Authorization", "")
+    if not token.lower().startswith("bearer "):
+        raise PermissionError("Sessiya topilmadi")
+    access = token.split(" ", 1)[1].strip()
+    key = SUPABASE_ANON_KEY or SUPABASE_SERVICE_KEY
+    if not access or not key:
+        raise PermissionError("Supabase Auth konfiguratsiyasi topilmadi")
+
+    req = urllib.request.Request(SUPABASE_URL + "/auth/v1/user", method="GET")
+    req.add_header("apikey", key)
+    req.add_header("Authorization", "Bearer " + access)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            user = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        raise PermissionError("Sessiya yaroqsiz yoki muddati tugagan")
+    if not user.get("id"):
+        raise PermissionError("Foydalanuvchi aniqlanmadi")
+    REQUEST_ACCESS_TOKEN.set(access)
+    return user
+
+
+def rest(method, table, query=None, body=None, prefer=None):
+    # Backward-compatible convenience: all POST call sites in this API pass
+    # the JSON row as the third argument. Never serialize that row into the
+    # URL as PostgREST filters (e.g. name=Mening Do'konim).
+    if method in ("POST", "PATCH") and body is None and isinstance(query, dict):
+        body, query = query, None
+
+    # Production should use the service-role key. If it is not configured,
+    # fall back to the authenticated user's JWT so Supabase RLS remains in control.
+    use_service = bool(SUPABASE_SERVICE_KEY)
+    key = SUPABASE_SERVICE_KEY if use_service else SUPABASE_ANON_KEY
+    bearer = SUPABASE_SERVICE_KEY if use_service else REQUEST_ACCESS_TOKEN.get()
+    if not key or not bearer:
+        raise RuntimeError("Supabase server konfiguratsiyasi to‘liq emas")
+    url = SUPABASE_URL + "/rest/v1/" + table
+    if query:
+        url += "?" + urllib.parse.urlencode(query, doseq=True)
+    raw = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(url, data=raw, method=method)
+    req.add_header("apikey", key)
+    req.add_header("Authorization", "Bearer " + bearer)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    req.add_header(
+        "Prefer",
+        prefer or ("return=representation" if method in ("POST", "PATCH") else "return=minimal"),
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            text = r.read().decode("utf-8")
+            return json.loads(text) if text else []
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(detail[:1000])
+
+
+def one(table, query):
+    rows = rest("GET", table, query)
+    return rows[0] if rows else None
+
+
+def normalize_phone(v):
+    d = "".join(c for c in str(v or "") if c.isdigit())
+    if d.startswith("998") and len(d) == 12:
+        return "+" + d
+    if d.startswith("8") and len(d) == 9:
+        return "+998" + d
+    if len(d) == 9:
+        return "+998" + d
+    return ("+" + d) if d else ""
+
+
+def member_for(user):
+    uid = user["id"]
+    rows = rest(
+        "GET",
+        "shop_members",
+        {"user_id": "eq." + uid, "select": "*", "order": "created_at.desc", "limit": "1"},
+    )
+    if rows:
+        member = rows[0]
+        if member.get("status") == "pending":
+            updated = rest(
+                "PATCH", "shop_members", {"id": "eq." + member["id"]}, {"status": "active"}
+            )
+            return updated[0] if updated else member
+        return member
+
+    phone = normalize_phone(user.get("phone", ""))
+    if phone:
+        pending = one(
+            "shop_members",
+            {
+                "phone": "eq." + phone,
+                "role": "eq.SELLER",
+                "user_id": "is.null",
+                "status": "in.(pending,active)",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        if pending:
+            updated = rest(
+                "PATCH",
+                "shop_members",
+                {"id": "eq." + pending["id"]},
+                {"user_id": uid, "status": "active"},
+            )
+            return updated[0] if updated else pending
+    return None
+
+
+def bootstrap(user):
+    uid = user["id"]
+    meta = user.get("user_metadata") or {}
+    phone = normalize_phone(user.get("phone", ""))
+    name = str(meta.get("full_name") or meta.get("name") or "Do'kon egasi").strip()[:120]
+
+    # Owner is determined by ownership of a shop, not by whichever membership
+    # row happens to be returned first.
+    owned = one(
+        "shops",
+        {"owner_id": "eq." + uid, "select": "*", "order": "created_at.asc", "limit": "1"},
+    )
+    if owned:
+        # If this is a fresh Owner registration and a legacy/default shop already
+        # exists for the same account, keep the existing shop/data but apply the
+        # requested shop name instead of silently showing "Mening Do'konim".
+        requested_shop_name = str(meta.get("shop_name") or "").strip()[:160]
+        if str(meta.get("qz_registration_intent") or "").upper() == "OWNER" and requested_shop_name:
+            current_name = str(owned.get("name") or "").strip()
+            if requested_shop_name != current_name:
+                updated_shop = rest(
+                    "PATCH",
+                    "shops",
+                    {"id": "eq." + owned["id"]},
+                    {"name": requested_shop_name},
+                )
+                if updated_shop:
+                    owned = updated_shop[0]
+        members = rest(
+            "GET",
+            "shop_members",
+            {"shop_id": "eq." + owned["id"], "user_id": "eq." + uid, "select": "*", "limit": "1"},
+        )
+        if members:
+            member = members[0]
+            if member.get("role") != "OWNER" or member.get("status") != "active":
+                updated = rest(
+                    "PATCH",
+                    "shop_members",
+                    {"id": "eq." + member["id"]},
+                    {"role": "OWNER", "status": "active", "full_name": name, "phone": phone or member.get("phone")},
+                )
+                member = updated[0] if updated else member
+        else:
+            member = rest(
+                "POST",
+                "shop_members",
+                {
+                    "shop_id": owned["id"],
+                    "user_id": uid,
+                    "phone": phone or uid,
+                    "full_name": name,
+                    "role": "OWNER",
+                    "status": "active",
+                },
+            )[0]
+        return member, owned
+
+    # A pending invitation always wins over public Owner registration.
+    if phone:
+        pending = one(
+            "shop_members",
+            {
+                "phone": "eq." + phone,
+                "role": "eq.SELLER",
+                "user_id": "is.null",
+                "status": "in.(pending,active)",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+        if pending:
+            updated = rest(
+                "PATCH",
+                "shop_members",
+                {"id": "eq." + pending["id"]},
+                {"user_id": uid, "status": "active"},
+            )
+            member = updated[0] if updated else pending
+            shop = one("shops", {"id": "eq." + member["shop_id"], "select": "*", "limit": "1"})
+            if shop:
+                return member, shop
+
+    # Public "Ro'yxatdan o'tish" creates a new shop and makes this user its Owner.
+    if meta.get("qz_registration_intent") == "OWNER":
+        shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
+        shop = rest(
+            "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
+        )[0]
+        member = rest(
+            "POST",
+            "shop_members",
+            {
+                "shop_id": shop["id"],
+                "user_id": uid,
+                "phone": phone or uid,
+                "full_name": name,
+                "role": "OWNER",
+                "status": "active",
+            },
+        )[0]
+        return member, shop
+
+    # Seller registration is never allowed to create a new shop.
+    # The owner must first invite this exact phone number.
+    if str(meta.get("qz_registration_intent") or "").upper() == "SELLER":
+        raise PermissionError("Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.")
+
+    # Existing membership is used for normal login.
+    existing = member_for(user)
+    if existing:
+        shop = one(
+            "shops", {"id": "eq." + existing["shop_id"], "select": "*", "limit": "1"}
+        )
+        if shop:
+            return existing, shop
+        raise RuntimeError("A'zolik do'koni topilmadi")
+
+    # First login without an explicit registration intent also bootstraps Owner.
+    shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
+    shop = rest(
+        "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
+    )[0]
+    member = rest(
+        "POST",
+        "shop_members",
+        {
+            "shop_id": shop["id"],
+            "user_id": uid,
+            "phone": phone or uid,
+            "full_name": name,
+            "role": "OWNER",
+            "status": "active",
+        },
+    )[0]
+    return member, shop
+
+
+def require_context(h):
+    user = auth_user(h)
+    member, shop = bootstrap(user)
+    if not member or not shop or member.get("status") != "active":
+        raise PermissionError("Do'kon a'zoligi topilmadi yoki faol emas")
+    if shop.get("status") == "disabled":
+        raise PermissionError("Do'kon faol emas")
+    return user, member, shop
+
+
+def actor_map(members):
+    return {
+        m.get("user_id"): m.get("full_name") or "Foydalanuvchi"
+        for m in members
+        if m.get("user_id")
+    }
+
+
+def audit(shop_id, user_id, actor_name, action, entity_type, entity_id=None, old=None, new=None):
+    rest(
+        "POST",
+        "shop_audit_logs",
+        {
+            "shop_id": shop_id,
+            "actor_user_id": user_id,
+            "actor_name": actor_name,
+            "action": action,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "old_data": old,
+            "new_data": new,
+        },
+    )
+
+
+def shop_rows(table, shop_id, order=None):
+    q = {"shop_id": "eq." + shop_id, "select": "*"}
+    if order:
+        q["order"] = order
+    return rest("GET", table, q)
+
+
+def calculate_balances(customers, debts, payments):
+    active_debts = [d for d in debts if d.get("status") == "active"]
+    recorded_payments = [p for p in payments if p.get("status") == "recorded"]
+    debt_by_customer, paid_by_customer = {}, {}
+    for d in active_debts:
+        cid = d.get("customer_id")
+        debt_by_customer[cid] = debt_by_customer.get(cid, 0) + float(d.get("amount") or 0)
+    for p in recorded_payments:
+        cid = p.get("customer_id")
+        paid_by_customer[cid] = paid_by_customer.get(cid, 0) + float(p.get("amount") or 0)
+    return {
+        c["id"]: round(debt_by_customer.get(c["id"], 0) - paid_by_customer.get(c["id"], 0), 2)
+        for c in customers
+    }
+
+
+def dashboard(shop_id, members):
+    customers = shop_rows("shop_customers", shop_id)
+    debts = shop_rows("shop_debts", shop_id, "created_at.desc")
+    payments = shop_rows("shop_payments", shop_id, "created_at.desc")
+    active_debts = [d for d in debts if d.get("status") == "active"]
+    recorded_payments = [p for p in payments if p.get("status") == "recorded"]
+    total_debt = sum(float(d.get("amount") or 0) for d in active_debts)
+    total_paid = sum(float(p.get("amount") or 0) for p in recorded_payments)
+    today = datetime.now(timezone.utc).date().isoformat()
+    today_paid = sum(
+        float(p.get("amount") or 0)
+        for p in recorded_payments
+        if str(p.get("created_at", ""))[:10] == today
+    )
+    balances = calculate_balances(customers, debts, payments)
+    return {
+        "customers": len(customers),
+        "active_debtors": sum(1 for v in balances.values() if v > 0.009),
+        "total_debt": round(total_debt, 2),
+        "total_paid": round(total_paid, 2),
+        "balance": round(total_debt - total_paid, 2),
+        "today_paid": round(today_paid, 2),
+        "members": len([m for m in members if m.get("role") == "SELLER" and m.get("status") == "active"]),
+    }
+
+
+def payload(shop_id, members):
+    customers = shop_rows("shop_customers", shop_id, "created_at.desc")
+    debts = shop_rows("shop_debts", shop_id, "created_at.desc")
+    payments = shop_rows("shop_payments", shop_id, "created_at.desc")
+    names = actor_map(members)
+    balances = calculate_balances(customers, debts, payments)
+    for c in customers:
+        cid = c["id"]
+        c["total_debt"] = round(
+            sum(float(d.get("amount") or 0) for d in debts if d.get("customer_id") == cid and d.get("status") == "active"), 2
+        )
+        c["total_paid"] = round(
+            sum(float(p.get("amount") or 0) for p in payments if p.get("customer_id") == cid and p.get("status") == "recorded"), 2
+        )
+        c["balance"] = balances.get(cid, 0)
+        c["created_by_name"] = names.get(c.get("created_by"), "Foydalanuvchi")
+    for d in debts:
+        d["created_by_name"] = names.get(d.get("created_by"), "Foydalanuvchi")
+    for p in payments:
+        p["created_by_name"] = names.get(p.get("created_by"), "Foydalanuvchi")
+    return customers, debts, payments
+
+
+def parse_legacy_date(value):
+    s = str(value or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            pass
+    return None
+
+
+def import_legacy_customers(shop_id, user_id, actor_name, legacy):
+    if not isinstance(legacy, list):
+        raise RuntimeError("Eski ma'lumotlar formati noto'g'ri")
+
+    existing = shop_rows("shop_customers", shop_id)
+    if existing:
+        raise RuntimeError("Do'konda allaqachon yangi ma'lumotlar mavjud; avtomatik import to'xtatildi")
+
+    imported = 0
+    for old in legacy[:5000]:
+        name = str(old.get("name") or "").strip()[:160]
+        if not name:
+            continue
+
+        customer = rest(
+            "POST",
+            "shop_customers",
+            {
+                "shop_id": shop_id,
+                "full_name": name,
+                "phone": normalize_phone(old.get("phone", "")) or None,
+                "note": str(old.get("note") or "").strip()[:500] or None,
+                "status": "archived" if old.get("archived") else "active",
+                "created_by": user_id,
+                "created_at": parse_legacy_date(old.get("dateGiven")) or datetime.now(timezone.utc).isoformat(),
+            },
+        )[0]
+
+        history = old.get("history") if isinstance(old.get("history"), list) else []
+        if not history and float(old.get("amount") or 0) > 0:
+            history = [{
+                "date": old.get("dateGiven"),
+                "type": "Dastlabki qarz",
+                "amount": old.get("amount"),
+                "item": old.get("note") or "Eski qarz",
+            }]
+
+        for event in history:
+            try:
+                amount = float(event.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0
+            if amount <= 0:
+                continue
+
+            event_type = str(event.get("type") or "").lower()
+            event_date = parse_legacy_date(event.get("date"))
+            is_payment = ("to'lov" in event_type) or ("to‘lov" in event_type) or ("to'liq" in event_type) or ("to‘liq" in event_type)
+
+            if is_payment:
+                row = rest(
+                    "POST",
+                    "shop_payments",
+                    {
+                        "shop_id": shop_id,
+                        "customer_id": customer["id"],
+                        "amount": amount,
+                        "note": str(event.get("item") or "Eski to'lov")[:500],
+                        "status": "recorded",
+                        "created_by": user_id,
+                        **({"created_at": event_date} if event_date else {}),
+                    },
+                )[0]
+                audit(shop_id, user_id, actor_name, "IMPORT", "PAYMENT", row["id"], None, row)
+            else:
+                row = rest(
+                    "POST",
+                    "shop_debts",
+                    {
+                        "shop_id": shop_id,
+                        "customer_id": customer["id"],
+                        "amount": amount,
+                        "note": str(event.get("item") or "Eski qarz")[:500],
+                        "status": "active",
+                        "created_by": user_id,
+                        **({"created_at": event_date} if event_date else {}),
+                    },
+                )[0]
+                audit(shop_id, user_id, actor_name, "IMPORT", "DEBT", row["id"], None, row)
+
+        audit(shop_id, user_id, actor_name, "IMPORT", "CUSTOMER", customer["id"], None, customer)
+        imported += 1
+
+    return imported
+
+
+def customer_balance(shop_id, customer_id):
+    customers = shop_rows("shop_customers", shop_id)
+    debts = shop_rows("shop_debts", shop_id)
+    payments = shop_rows("shop_payments", shop_id)
+    return float(calculate_balances(customers, debts, payments).get(customer_id, 0))
+
+
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            user, member, shop = require_context(self)
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            action = (params.get("action", ["bootstrap"])[0] or "bootstrap").lower()
+            members = shop_rows("shop_members", shop["id"], "created_at.asc")
+            if action == "bootstrap":
+                send_json(self, {"ok": True, "data": {"user": {"id": user["id"], "phone": user.get("phone"), "name": member.get("full_name")}, "shop": shop, "member": member, "dashboard": dashboard(shop["id"], members)}})
+                return
+            if action == "data":
+                customers, debts, payments = payload(shop["id"], members)
+                send_json(self, {"ok": True, "data": {"customers": customers, "debts": debts, "payments": payments, "members": members}})
+                return
+            if action == "audit":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Audit faqat egaga ochiq")
+                send_json(self, {"ok": True, "data": shop_rows("shop_audit_logs", shop["id"], "created_at.desc")[:500]})
+                return
+            if action == "activity":
+                rows = shop_rows("shop_audit_logs", shop["id"], "created_at.desc")
+                own = [x for x in rows if x.get("actor_user_id") == user["id"]][:300]
+                send_json(self, {"ok": True, "data": own})
+                return
+            if action == "reports":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Hisobotlar faqat OWNER uchun")
+                customers, debts, payments = payload(shop["id"], members)
+                active = [d for d in debts if d.get("status") == "active"]
+                recorded = [p for p in payments if p.get("status") == "recorded"]
+                by_seller = {}
+                for m in members:
+                    by_seller[m.get("user_id")] = {"name": m.get("full_name") or "Foydalanuvchi", "debts": 0, "debt_amount": 0, "payments": 0, "payment_amount": 0}
+                for d in active:
+                    x = by_seller.get(d.get("created_by"))
+                    if x: x["debts"] += 1; x["debt_amount"] += float(d.get("amount") or 0)
+                for p in recorded:
+                    x = by_seller.get(p.get("created_by"))
+                    if x: x["payments"] += 1; x["payment_amount"] += float(p.get("amount") or 0)
+                for x in by_seller.values():
+                    x["debt_amount"] = round(x["debt_amount"], 2)
+                    x["payment_amount"] = round(x["payment_amount"], 2)
+                send_json(self, {"ok": True, "data": {"customers": len(customers), "active_debtors": sum(1 for c in customers if float(c.get("balance") or 0) > 0.009), "debt_total": round(sum(float(x.get("amount") or 0) for x in active),2), "payment_total": round(sum(float(x.get("amount") or 0) for x in recorded),2), "seller_stats": list(by_seller.values())}})
+                return
+            raise RuntimeError("Noma'lum action")
+        except PermissionError as e:
+            send_json(self, {"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            send_json(self, {"ok": False, "error": str(e)}, 500)
+
+    def do_POST(self):
+        try:
+            user, member, shop = require_context(self)
+            body = read_json(self)
+            action = str(body.get("action", "")).lower()
+            if action == "legacy_import":
+                if member["role"] not in ("OWNER", "SELLER"):
+                    raise PermissionError("Do'kon a'zoligi talab qilinadi")
+                count = import_legacy_customers(
+                    shop["id"],
+                    user["id"],
+                    member.get("full_name") or "Foydalanuvchi",
+                    body.get("customers"),
+                )
+                send_json(self, {"ok": True, "data": {"imported": count}})
+                return
+            if action == "shop_update":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                name = str(body.get("name", "")).strip()[:160]
+                if not name:
+                    raise RuntimeError("Do'kon nomi kerak")
+                old_shop = dict(shop)
+                updated = rest("PATCH", "shops", {"id": "eq." + shop["id"]}, {"name": name})[0]
+                audit(shop["id"], user["id"], member["full_name"], "UPDATE", "SHOP", shop["id"], old_shop, updated)
+                send_json(self, {"ok": True, "data": updated})
+                return
+            if action == "customer_create":
+                name = str(body.get("full_name", "")).strip()[:160]
+                if not name:
+                    raise RuntimeError("Mijoz ismi kerak")
+                row = rest("POST", "shop_customers", {"shop_id": shop["id"], "full_name": name, "phone": normalize_phone(body.get("phone", "")) or None, "note": str(body.get("note", "")).strip()[:500] or None, "created_by": user["id"]})[0]
+                audit(shop["id"], user["id"], member["full_name"], "CREATE", "CUSTOMER", row["id"], None, row)
+                send_json(self, {"ok": True, "data": row})
+                return
+            if action == "debt_create":
+                cid, amount = str(body.get("customer_id", "")), float(body.get("amount") or 0)
+                if amount <= 0:
+                    raise RuntimeError("Qarz summasi 0 dan katta bo'lishi kerak")
+                if not one("shop_customers", {"id": "eq." + cid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"}):
+                    raise RuntimeError("Mijoz topilmadi")
+                row = rest("POST", "shop_debts", {"shop_id": shop["id"], "customer_id": cid, "amount": amount, "note": str(body.get("note", "")).strip()[:500] or None, "due_date": body.get("due_date") or None, "created_by": user["id"]})[0]
+                audit(shop["id"], user["id"], member["full_name"], "CREATE", "DEBT", row["id"], None, row)
+                send_json(self, {"ok": True, "data": row})
+                return
+            if action == "payment_create":
+                cid, amount = str(body.get("customer_id", "")), float(body.get("amount") or 0)
+                if amount <= 0:
+                    raise RuntimeError("To'lov summasi 0 dan katta bo'lishi kerak")
+                if not one("shop_customers", {"id": "eq." + cid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"}):
+                    raise RuntimeError("Mijoz topilmadi")
+                balance = customer_balance(shop["id"], cid)
+                if balance <= 0:
+                    raise RuntimeError("Bu mijozda faol qarz yo'q")
+                if amount > balance + 0.009:
+                    raise RuntimeError("To'lov qoldiq qarzdan katta bo'lishi mumkin emas")
+                row = rest("POST", "shop_payments", {"shop_id": shop["id"], "customer_id": cid, "debt_id": body.get("debt_id") or None, "amount": amount, "note": str(body.get("note", "")).strip()[:500] or None, "created_by": user["id"]})[0]
+                audit(shop["id"], user["id"], member["full_name"], "CREATE", "PAYMENT", row["id"], None, row)
+                send_json(self, {"ok": True, "data": row})
+                return
+            if action == "seller_invite":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                name, phone = str(body.get("full_name", "")).strip()[:120], normalize_phone(body.get("phone", ""))
+                if not name or not phone:
+                    raise RuntimeError("Sotuvchi ismi va telefoni kerak")
+                exists = one("shop_members", {"shop_id": "eq." + shop["id"], "phone": "eq." + phone, "select": "*", "limit": "1"})
+                # A legacy/broken invitation may be active but still have no auth user.
+                # Treat it as reusable pending invitation instead of blocking the seller.
+                if exists and exists.get("status") != "disabled" and exists.get("user_id"):
+                    raise RuntimeError("Bu telefon allaqachon do'konga ulangan yoki taklif qilingan")
+                if exists:
+                    # Keep an already-linked auth user intact when re-inviting an
+                    # existing disabled seller. Pending invitations normally have
+                    # user_id NULL; the DB migration makes that explicit.
+                    patch = {"full_name": name, "status": "pending", "role": "SELLER", "invited_by": user["id"]}
+                    if exists.get("status") == "disabled":
+                        patch["user_id"] = None
+                    row = rest("PATCH", "shop_members", {"id": "eq." + exists["id"]}, patch)[0]
+                else:
+                    row = rest("POST", "shop_members", {"shop_id": shop["id"], "phone": phone, "full_name": name, "role": "SELLER", "status": "pending", "invited_by": user["id"]})[0]
+                audit(shop["id"], user["id"], member["full_name"], "INVITE", "SELLER", row["id"], None, row)
+                send_json(self, {"ok": True, "data": row})
+                return
+            if action == "seller_status":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                mid, status = str(body.get("member_id", "")), str(body.get("status", ""))
+                if status not in ("active", "disabled", "pending"):
+                    raise RuntimeError("Status noto'g'ri")
+                target = one("shop_members", {"id": "eq." + mid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
+                if not target or target.get("role") != "SELLER":
+                    raise RuntimeError("Sotuvchi topilmadi")
+                updated = rest("PATCH", "shop_members", {"id": "eq." + mid}, {"status": status})[0]
+                audit(shop["id"], user["id"], member["full_name"], "STATUS", "SELLER", mid, target, updated)
+                send_json(self, {"ok": True, "data": updated})
+                return
+            if action == "customer_archive":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                cid = str(body.get("customer_id", ""))
+                target = one("shop_customers", {"id": "eq." + cid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
+                if not target:
+                    raise RuntimeError("Mijoz topilmadi")
+                updated = rest("PATCH", "shop_customers", {"id": "eq." + cid}, {"status": "archived"})[0]
+                audit(shop["id"], user["id"], member["full_name"], "ARCHIVE", "CUSTOMER", cid, target, updated)
+                send_json(self, {"ok": True, "data": updated})
+                return
+            if action == "payment_cancel":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                pid = str(body.get("payment_id", ""))
+                target = one("shop_payments", {"id": "eq." + pid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
+                if not target:
+                    raise RuntimeError("To'lov topilmadi")
+                reason = str(body.get("reason", "")).strip()[:250]
+                updated = rest("PATCH", "shop_payments", {"id": "eq." + pid}, {"status": "cancelled", "note": (target.get("note") or "") + (" | Bekor qilindi: " + reason if reason else " | Bekor qilindi")})[0]
+                audit(shop["id"], user["id"], member["full_name"], "CANCEL", "PAYMENT", pid, target, updated)
+                send_json(self, {"ok": True, "data": updated})
+                return
+            if action == "debt_cancel":
+                if member["role"] != "OWNER":
+                    raise PermissionError("Faqat OWNER")
+                did = str(body.get("debt_id", ""))
+                target = one("shop_debts", {"id": "eq." + did, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
+                if not target:
+                    raise RuntimeError("Qarz topilmadi")
+                reason = str(body.get("reason", "")).strip()[:250]
+                updated = rest("PATCH", "shop_debts", {"id": "eq." + did}, {"status": "cancelled", "note": (target.get("note") or "") + (" | Bekor qilindi: " + reason if reason else " | Bekor qilindi")})[0]
+                audit(shop["id"], user["id"], member["full_name"], "CANCEL", "DEBT", did, target, updated)
+                send_json(self, {"ok": True, "data": updated})
+                return
+            raise RuntimeError("Noma'lum amal")
+        except PermissionError as e:
+            send_json(self, {"ok": False, "error": str(e)}, 403)
+        except Exception as e:
+            send_json(self, {"ok": False, "error": str(e)}, 400)
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()

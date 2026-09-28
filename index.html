@@ -19,6 +19,7 @@
          hammasi Supabase'da, faqat redeem_promo_code() funksiyasi orqali ishlaydi. -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="/analytics.js" defer></script>
+    <script src="/auth-supabase.js?v=20260927-otpfix1" defer></script>
 
     <style>
         :root {
@@ -182,12 +183,26 @@
             </div>
 
             <div id="reg-fields" style="display: none;">
+                <div id="registration-role-badge" style="margin:-8px 0 14px;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;font-weight:700;text-align:center;">
+                    🏪 Do‘kon egasi sifatida ro‘yxatdan o‘tish
+                </div>
+                <div class="form-group">
+                    <label>Kim sifatida ro‘yxatdan o‘tasiz?</label>
+                    <div id="auth-role-choice" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                        <button type="button" id="role-owner-btn" class="btn" style="padding:11px;background:#2563eb;" onclick="setRegistrationRole('OWNER')">🏪 Do‘kon egasi</button>
+                        <button type="button" id="role-seller-btn" class="btn" style="padding:11px;background:#e2e8f0;color:#334155;" onclick="setRegistrationRole('SELLER')">👤 Sotuvchi</button>
+                    </div>
+                    <input type="hidden" id="auth-role" value="OWNER">
+                    <div id="seller-role-hint" style="display:none;margin-top:8px;padding:9px 11px;border-radius:8px;background:#eff6ff;color:#1e40af;font-size:12px;line-height:1.45;">
+                        Sotuvchi uchun do‘kon nomi kerak emas. SMS tasdiqlashdan keyin tizim telefon raqamingiz bo‘yicha sizni egasi belgilagan do‘konga ulaydi.
+                    </div>
+                </div>
                 <div class="form-group">
                     <label id="lbl-name">Ismingiz</label>
                     <input type="text" id="auth-name" placeholder="Masalan: Elbek">
                 </div>
-                <div class="form-group">
-                    <label id="lbl-shop">Do'kon nomi</label>
+                <div class="form-group" id="auth-shop-group">
+                    <label id="lbl-shop">Do‘kon nomi</label>
                     <input type="text" id="auth-shop" placeholder="Masalan: Baraka Market">
                 </div>
             </div>
@@ -206,6 +221,7 @@
         <div style="display: flex; gap: 6px; align-items: center;">
             <button class="lang-switch" onclick="toggleLanguage()"><span id="lang-btn-text">🌐 RU</span></button>
             <button id="install-btn" onclick="showHomeScreenHelp()" style="background:white; color:#2563eb; border:none; padding:5px 8px; border-radius:5px; font-weight:bold; font-size:11px;">📱</button>
+            <button id="shop-management-btn" type="button" onclick="openShopPanel(currentUser)" style="display:none;background:white; color:#2563eb; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;">🏪 Do‘kon boshqaruvi</button>
             <button onclick="logoutApp()" style="background:#ef4444; color:white; border:none; padding:6px 10px; border-radius:6px; font-weight:bold; font-size:12px; cursor:pointer;" id="btn-logout">🚪 Chiqish</button>
         </div>
     </header>
@@ -732,6 +748,7 @@
 
         function initApp() {
             setLanguage(currentLang);
+            updateShopManagementVisibility(currentUser);
             if (!currentUser) {
                 authScreen.style.display = 'flex';
                 customers = [];
@@ -763,6 +780,41 @@
             }
         }
 
+        function setRegistrationRole(role) {
+            role = role === 'SELLER' ? 'SELLER' : 'OWNER';
+            const input = document.getElementById('auth-role');
+            const ownerBtn = document.getElementById('role-owner-btn');
+            const sellerBtn = document.getElementById('role-seller-btn');
+            const shopGroup = document.getElementById('auth-shop-group');
+            const shopInput = document.getElementById('auth-shop');
+            const hint = document.getElementById('seller-role-hint');
+            if (input) input.value = role;
+            if (ownerBtn) {
+                ownerBtn.style.background = role === 'OWNER' ? '#2563eb' : '#e2e8f0';
+                ownerBtn.style.color = role === 'OWNER' ? '#fff' : '#334155';
+            }
+            if (sellerBtn) {
+                sellerBtn.style.background = role === 'SELLER' ? '#2563eb' : '#e2e8f0';
+                sellerBtn.style.color = role === 'SELLER' ? '#fff' : '#334155';
+            }
+            if (shopGroup) shopGroup.style.display = role === 'OWNER' ? 'block' : 'none';
+            if (shopInput) shopInput.required = role === 'OWNER';
+            if (hint) {
+                hint.style.display = role === 'SELLER' ? 'block' : 'none';
+                hint.innerHTML = role === 'SELLER'
+                    ? '👤 <b>Sotuvchi sifatida</b> ro‘yxatdan o‘tyapsiz. Sizni do‘kon egasi telefon raqamingiz orqali o‘z do‘koniga qo‘shishi kerak.'
+                    : '🏪 <b>Do‘kon egasi sifatida</b> yangi do‘kon yaratasiz.';
+            }
+            const roleBadge = document.getElementById('registration-role-badge');
+            if (roleBadge) {
+                roleBadge.textContent = role === 'SELLER'
+                    ? '👤 Sotuvchi sifatida ro‘yxatdan o‘tish'
+                    : '🏪 Do‘kon egasi sifatida ro‘yxatdan o‘tish';
+                roleBadge.style.background = role === 'SELLER' ? '#f3e8ff' : '#eff6ff';
+                roleBadge.style.color = role === 'SELLER' ? '#6b21a8' : '#1d4ed8';
+            }
+        }
+
         function switchAuthMode(mode) {
             authMode = mode;
             const regFields = document.getElementById('reg-fields');
@@ -781,7 +833,7 @@
                 btnReg.style.background = "#2563eb";
                 btnLogin.style.background = "#64748b";
                 document.getElementById('auth-name').required = true;
-                document.getElementById('auth-shop').required = true;
+                setRegistrationRole(document.getElementById('auth-role')?.value || 'OWNER');
             } else {
                 regFields.style.display = 'none';
                 submitBtn.innerText = t.btnLoginMode;
@@ -837,11 +889,16 @@
             }
         });
 
-        function logoutApp() {
+        async function logoutApp() {
             if (confirm(L('confirmLogout'))) {
                 localStorage.removeItem('shop_user');
+                localStorage.removeItem('qarzniuz_shop_role');
+                localStorage.removeItem('qarzniuz_shop_role_phone');
                 currentUser = null;
                 customers = [];
+                try {
+                    if (window.QarzniUzAuth?.logout) await window.QarzniUzAuth.logout();
+                } catch (_) {}
                 window.location.reload();
             }
         }
@@ -1112,6 +1169,23 @@
                 alert(L('alertPayFullDone'));
                 renderCustomers();
             }
+        }
+
+        function updateShopManagementVisibility(user){
+  const btn=document.getElementById('shop-management-btn');
+  if(!btn)return;
+  const role=String(user?.role||user?.shopRole||localStorage.getItem('qarzniuz_shop_role')||'').toUpperCase();
+  const rolePhone=localStorage.getItem('qarzniuz_shop_role_phone')||'';
+  btn.style.display=(role==='OWNER' && rolePhone===String(user?.phone||''))?'inline-block':'none';
+}
+function openShopPanel(user) {
+            if (!user) {
+                alert("Avval tizimga kiring.");
+                return;
+            }
+            // Supabase session is persisted by auth-supabase.js.
+            // Open the shared-shop panel in the same origin so the session is reused.
+            window.location.href = '/shop.html';
         }
 
         function sendSMS(phone, name, amount, dateDue) {

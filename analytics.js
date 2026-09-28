@@ -234,11 +234,18 @@
         return;
       }
 
-      // Trigger the form submit path used by auth-supabase.js.
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit(target);
+      // Route directly to the Supabase PIN login.
+      // The auth module intentionally changes the button to type="button",
+      // so requestSubmit(target) is invalid here and can abort the click flow.
+      if (window.QarzniUzAuth && typeof window.QarzniUzAuth.loginWithPin === 'function') {
+        window.QarzniUzAuth.loginWithPin();
       } else {
-        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        const msg = document.getElementById('qarzniuz-otp-status');
+        if (msg) {
+          msg.textContent = 'Kirish moduli hali yuklanmagan. Sahifani yangilang.';
+          msg.style.color = '#b91c1c';
+          msg.style.background = '#fef2f2';
+        }
       }
     }, true);
   }

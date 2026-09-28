@@ -1,11 +1,11 @@
-const CACHE_NAME = 'qarzniuz-v18';
+const CACHE_NAME = 'qarzniuz-v21';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/analytics.js',
-  '/auth-supabase.js',
+  '/auth-supabase.js?v=20260927-otpfix1',
   '/admin-marketing.js?v=20260917-3',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
