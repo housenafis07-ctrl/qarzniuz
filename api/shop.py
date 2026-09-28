@@ -108,6 +108,21 @@ def normalize_phone(v):
     return ("+" + d) if d else ""
 
 
+def find_unlinked_seller(phone, shop_id=None):
+    """Find an invited seller by normalized phone, tolerating legacy formatting/status."""
+    target = normalize_phone(phone)
+    if not target:
+        return None
+    q = {"role": "eq.SELLER", "user_id": "is.null", "select": "*", "order": "created_at.asc"}
+    if shop_id:
+        q["shop_id"] = "eq." + shop_id
+    rows = rest("GET", "shop_members", q)
+    for row in rows:
+        if normalize_phone(row.get("phone")) == target and str(row.get("status") or "").lower() in ("pending", "active"):
+            return row
+    return None
+
+
 def member_for(user):
     uid = user["id"]
     rows = rest(
@@ -126,17 +141,7 @@ def member_for(user):
 
     phone = normalize_phone(user.get("phone", ""))
     if phone:
-        pending = one(
-            "shop_members",
-            {
-                "phone": "eq." + phone,
-                "role": "eq.SELLER",
-                "user_id": "is.null",
-                "status": "in.(pending,active)",
-                "select": "*",
-                "limit": "1",
-            },
-        )
+        pending = find_unlinked_seller(phone)
         if pending:
             updated = rest(
                 "PATCH",
@@ -208,17 +213,7 @@ def bootstrap(user):
 
     # A pending invitation always wins over public Owner registration.
     if phone:
-        pending = one(
-            "shop_members",
-            {
-                "phone": "eq." + phone,
-                "role": "eq.SELLER",
-                "user_id": "is.null",
-                "status": "in.(pending,active)",
-                "select": "*",
-                "limit": "1",
-            },
-        )
+        pending = find_unlinked_seller(phone)
         if pending:
             updated = rest(
                 "PATCH",
