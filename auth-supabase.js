@@ -226,6 +226,13 @@
     document.getElementById('btn-mode-login')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
     document.getElementById('btn-mode-register')?.addEventListener('click',()=>setTimeout(()=>{updateUI();installButtonGuard();},0),true);
   }
-  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI,logout:async function(){sessionStorage.removeItem(OTP_STATE_KEY);try{await getClient().auth.signOut({scope:'local'});}catch(_){} }};
+  async function setPinForCurrentUser(pin){
+    if(!/^\d{4}$/.test(String(pin||''))) throw new Error('PIN 4 xonali bo‘lishi kerak.');
+    const h=await hashPin(String(pin));
+    const {data,error}=await getClient().auth.updateUser({password:h,data:{qarzniuz_pin_hash:h}});
+    if(error) throw error;
+    return data?.user;
+  }
+  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI,setPinForCurrentUser,logout:async function(){sessionStorage.removeItem(OTP_STATE_KEY);try{await getClient().auth.signOut({scope:'local'});}catch(_){} }};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
