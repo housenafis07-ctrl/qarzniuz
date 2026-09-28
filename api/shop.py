@@ -538,7 +538,17 @@ class handler(BaseHTTPRequestHandler):
                 for x in by_seller.values():
                     x["debt_amount"] = round(x["debt_amount"], 2)
                     x["payment_amount"] = round(x["payment_amount"], 2)
-                send_json(self, {"ok": True, "data": {"customers": len(customers), "active_debtors": sum(1 for c in customers if float(c.get("balance") or 0) > 0.009), "debt_total": round(sum(float(x.get("amount") or 0) for x in active),2), "payment_total": round(sum(float(x.get("amount") or 0) for x in recorded),2), "seller_stats": list(by_seller.values())}})
+                historical_debt_total = round(sum(float(x.get("amount") or 0) for x in active), 2)
+                payment_total = round(sum(float(x.get("amount") or 0) for x in recorded), 2)
+                current_debt_total = round(sum(float(c.get("balance") or 0) for c in customers if c.get("status") == "active"), 2)
+                send_json(self, {"ok": True, "data": {
+                    "customers": len(customers),
+                    "active_debtors": sum(1 for c in customers if float(c.get("balance") or 0) > 0.009),
+                    "debt_total": historical_debt_total,
+                    "payment_total": payment_total,
+                    "current_debt_total": current_debt_total,
+                    "seller_stats": list(by_seller.values())
+                }})
                 return
             raise RuntimeError("Noma'lum action")
         except PermissionError as e:
