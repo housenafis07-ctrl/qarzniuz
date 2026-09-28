@@ -441,6 +441,7 @@
                 lblName: "Ismingiz",
                 lblShop: "Do'kon nomi",
                 btnLogout: "🚪 Chiqish",
+                shopManagement: "🏪 Do‘kon boshqaruvi",
                 totalDebt: "UMUMIY QARZDORLIK",
                 searchPlaceholder: "🔍 Qidirish...",
                 optAll: "Barchasi",
@@ -540,6 +541,7 @@
                 lblName: "Vashe imya",
                 lblShop: "Nazvanie magazina",
                 btnLogout: "🚪 Vykhod",
+                shopManagement: "🏪 Upravlenie magazinom",
                 totalDebt: "OBSHCHAYA ZADOLZHENNOST",
                 searchPlaceholder: "🔍 Poisk...",
                 optAll: "Vse",
@@ -739,6 +741,8 @@
             document.getElementById('btn-mode-register').innerText = t.btnRegMode;
             document.getElementById('auth-warning-note').innerText = t.authWarning;
             document.getElementById('btn-logout').innerText = t.btnLogout;
+            const shopBtn = document.getElementById('shop-management-btn');
+            if (shopBtn) shopBtn.innerText = t.shopManagement;
             document.getElementById('lbl-total-debt-header').innerText = t.totalDebt;
             document.getElementById('search-input').placeholder = t.searchPlaceholder;
             document.getElementById('opt-all').innerText = t.optAll;
