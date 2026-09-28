@@ -11,7 +11,7 @@
 </head>
 <body>
 <div id="login" class="login hidden"><div class="loginbox"><h1>QarzniUz</h1><p class="muted">Do‘kon boshqaruv paneli uchun avval QarzniUz ilovasiga kiring.</p><button class="btn" onclick="location.href='/'">Asosiy ilovaga qaytish</button></div></div>
-<div id="app" class="app hidden"><aside class="side"><div class="brand">QarzniUz</div><div id="shopmini" class="shopmini"></div><div id="nav" class="nav"></div><button class="btn light" style="width:100%;margin-top:20px" onclick="location.href='/'">← Asosiy ilova</button></aside><main class="main"><div class="mobileTop"><b>QarzniUz</b><button class="btn light" onclick="location.href='/'">Asosiy ilova</button></div><div id="mobileNav" class="mobileNav"></div><div class="top"><div><h1 id="title">Dashboard</h1><div class="muted">Bitta do‘kon — barcha sotuvchilar uchun bitta umumiy daftar</div></div><span class="role" id="role"></span></div><section id="view"></section></main></div><div id="toast" class="toast"></div>
+<div id="app" class="app hidden"><aside class="side"><div class="brand">QarzniUz</div><div id="shopmini" class="shopmini"></div><div id="nav" class="nav"></div></aside><main class="main"><div class="mobileTop"><b>QarzniUz</b></div><div id="mobileNav" class="mobileNav"></div><div class="top"><div><h1 id="title">Dashboard</h1><div class="muted">Bitta do‘kon — barcha sotuvchilar uchun bitta umumiy daftar</div></div><span class="role" id="role"></span></div><section id="view"></section></main></div><div id="toast" class="toast"></div>
 <script>
 const SUPABASE_URL='https://yzicsoyufdghwiezqjsa.supabase.co',SUPABASE_ANON_KEY='sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM';const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});let ctx=null,data={customers:[],debts:[],payments:[],members:[]},current='dashboard';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),money=n=>new Intl.NumberFormat('uz-UZ').format(Number(n||0))+' so‘m',customerName=id=>data.customers.find(x=>x.id===id)?.full_name||'—';
@@ -62,7 +62,7 @@ async function start(){
     localStorage.setItem('qarzniuz_shop_role_phone',ctx.user.phone||'');
     buildNav();
     await loadData();
-    show('dashboard');
+    show(ctx.member.role==='OWNER'?'dashboard':'customers');
   }catch(e){
     console.error('Shop panel bootstrap failed:',e);
     const login=document.getElementById('login');
@@ -74,9 +74,14 @@ async function start(){
     toast(e?.message||'Do‘kon panelini ochib bo‘lmadi');
   }}
 function buildNav(){
-  let a=[['dashboard','Dashboard'],['customers','Mijozlar'],['debts','Qarzdorlar'],['payments','To‘lovlar']];
-  if(ctx.member.role==='OWNER')a.push(['sellers','Sotuvchilar'],['reports','Hisobotlar'],['audit','Audit tarixi'],['export','Export / Backup'],['settings','Sozlamalar']);
-  else a.push(['activity','Mening faoliyatim']);
+  let a=[];
+  if(ctx.member.role==='OWNER'){
+    a=[['dashboard','Dashboard'],['customers','Mijozlar'],['debts','Qarzdorlar'],['payments','To‘lovlar'],['sellers','Sotuvchilar'],['reports','Hisobotlar'],['audit','Audit tarixi'],['export','Export / Backup'],['settings','Sozlamalar']];
+  }else{
+    // Seller does not need a dashboard or legacy "Asosiy ilova" entry.
+    // They work directly with the shared shop ledger.
+    a=[['customers','Mijozlar'],['debts','Qarzdorlar'],['payments','To‘lovlar'],['activity','Mening faoliyatim']];
+  }
   document.getElementById('nav').innerHTML=a.map(x=>'<button id="n-'+x[0]+'" onclick="show(\''+x[0]+'\')">'+x[1]+'</button>').join('');
   document.getElementById('mobileNav').innerHTML='<select aria-label="Bo‘lim" onchange="show(this.value)">'+a.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join('')+'</select>';
 }
