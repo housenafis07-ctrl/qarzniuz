@@ -246,12 +246,10 @@ def bootstrap(user):
         )[0]
         return member, shop
 
-    # Seller registration is never allowed to create a new shop.
-    # The owner must first invite this exact phone number.
-    if str(meta.get("qz_registration_intent") or "").upper() == "SELLER":
-        raise PermissionError("Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.")
-
-    # Existing membership is used for normal login.
+    # An already-linked membership is authoritative. This is important when
+    # a seller retries registration: the invitation may already be active and
+    # linked to the same Supabase Auth user, so it must not be rejected merely
+    # because qz_registration_intent is still SELLER.
     existing = member_for(user)
     if existing:
         shop = one(
@@ -260,6 +258,11 @@ def bootstrap(user):
         if shop:
             return existing, shop
         raise RuntimeError("A'zolik do'koni topilmadi")
+
+    # Seller registration is never allowed to create a new shop.
+    # The owner must first invite this exact phone number.
+    if str(meta.get("qz_registration_intent") or "").upper() == "SELLER":
+        raise PermissionError("Siz do‘kon egasi tomonidan sotuvchi etib belgilanmagansiz. Avval do‘kon egasi sizni telefon raqamingiz orqali sotuvchi sifatida qo‘shishi kerak.")
 
     # First login without an explicit registration intent also bootstraps Owner.
     shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
