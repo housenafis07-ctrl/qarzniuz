@@ -520,6 +520,20 @@ class handler(BaseHTTPRequestHandler):
                 own = [x for x in rows if x.get("actor_user_id") == user["id"]][:300]
                 send_json(self, {"ok": True, "data": own})
                 return
+            if action == "seller_report":
+                if member["role"] != "SELLER":
+                    raise PermissionError("Bu hisobot faqat SOTUVCHI uchun")
+                customers, debts, payments = payload(shop["id"], members)
+                logs = shop_rows("shop_audit_logs", shop["id"], "created_at.desc")[:500]
+                send_json(self, {"ok": True, "data": {
+                    "shop": shop,
+                    "member": member,
+                    "customers": customers,
+                    "debts": debts,
+                    "payments": payments,
+                    "audit": logs
+                }})
+                return
             if action == "reports":
                 if member["role"] != "OWNER":
                     raise PermissionError("Hisobotlar faqat OWNER uchun")
