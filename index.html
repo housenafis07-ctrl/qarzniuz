@@ -426,6 +426,7 @@
         let customers = [];
         let authMode = 'login';
         let currentLang = localStorage.getItem('app_lang') || 'uz';
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 
         const dictionary = {
             uz: {
@@ -442,6 +443,8 @@
                 lblShop: "Do'kon nomi",
                 btnLogout: "🚪 Chiqish",
                 shopManagement: "🏪 Do‘kon boshqaruvi",
+                supportContact: "✈️ Murojaat",
+                profileTitle: "👤 MENING PROFILIM", profileInfo: "👤 Mening ma'lumotlarim", profileDebtors: "📋 Do‘kon qarzdorlari", profileDebtorsSub: "Barcha sotuvchilar bilan bir xil umumiy qarzdorlar ro‘yxati.", profileHistory: "🕒 O‘zgarishlar tarixi", profileHistorySub: "Kim, qachon va nima o‘zgartirgani.", profileExcel: "📊 Excelga yuklash", profilePin: "🔐 PIN-kodni o‘zgartirish",
                 totalDebt: "UMUMIY QARZDORLIK",
                 searchPlaceholder: "🔍 Qidirish...",
                 optAll: "Barchasi",
@@ -542,6 +545,8 @@
                 lblShop: "Nazvanie magazina",
                 btnLogout: "🚪 Vykhod",
                 shopManagement: "🏪 Upravlenie magazinom",
+                supportContact: "✈️ Obrashchenie",
+                profileTitle: "👤 MOY PROFIL", profileInfo: "👤 Moi dannye", profileDebtors: "📋 Dolgi magazina", profileDebtorsSub: "Obshchiy spisok dolzhnikov dlya vsekh prodavtsov.", profileHistory: "🕒 Istoriya izmeneniy", profileHistorySub: "Kto, kogda i chto izmenil.", profileExcel: "📊 Skachat Excel", profilePin: "🔐 Izmenit PIN-kod",
                 totalDebt: "OBSHCHAYA ZADOLZHENNOST",
                 searchPlaceholder: "🔍 Poisk...",
                 optAll: "Vse",
@@ -743,6 +748,15 @@
             document.getElementById('btn-logout').innerText = t.btnLogout;
             const shopBtn = document.getElementById('shop-management-btn');
             if (shopBtn) shopBtn.innerText = t.shopManagement;
+            const supportBtn = document.querySelector('header a[href*="qarzni_uzbot"]');
+            if (supportBtn) supportBtn.innerText = t.supportContact;
+            const profileTitle = document.querySelector('#tab-profile .stats-card h3');
+            if (profileTitle) profileTitle.innerText = t.profileTitle;
+            const profileCards = document.querySelectorAll('#tab-profile .container > div');
+            if (profileCards[0]) { const h=profileCards[0].querySelector('h3'); if(h) h.innerText=t.profileInfo; }
+            if (profileCards[1]) { const h=profileCards[1].querySelector('h3'); if(h) h.innerText=t.profileDebtors; const s=profileCards[1].querySelector('div[style*="font-size:12px"]'); if(s) s.innerText=t.profileDebtorsSub; }
+            if (profileCards[2]) { const h=profileCards[2].querySelector('h3'); if(h) h.innerText=t.profileHistory; const s=profileCards[2].querySelector('div[style*="font-size:12px"]'); if(s) s.innerText=t.profileHistorySub; const b=profileCards[2].querySelector('button'); if(b) b.innerText=t.profileExcel; }
+            const pinBtn=document.querySelector('#tab-profile button[onclick="changeSellerPin()"]'); if(pinBtn) pinBtn.innerText=t.profilePin;
             document.getElementById('lbl-total-debt-header').innerText = t.totalDebt;
             document.getElementById('search-input').placeholder = t.searchPlaceholder;
             document.getElementById('opt-all').innerText = t.optAll;
