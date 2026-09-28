@@ -73,7 +73,25 @@
       roleBadge.style.background=registrationRole==='SELLER'?'#f3e8ff':'#eff6ff';
       roleBadge.style.color=registrationRole==='SELLER'?'#6b21a8':'#1d4ed8';
     }
-    let first=null;const render=()=>{const c=first!==null;title.textContent=c?'PIN-kodni tasdiqlang':'Yangi PIN-kod yarating';hint.textContent=c?'Xuddi shu 4 xonali PIN-kodni yana kiriting.':'Keyingi kirishlarda telefon raqami bilan birga shu PIN-kod ishlatiladi.';btn.textContent=c?'PIN-kodni saqlash':'Davom etish';};render();input.focus();btn.onclick=async()=>{const v=input.value.replace(/\D/g,'');err.textContent='';if(!/^\d{4}$/.test(v)){err.textContent='PIN-kod aynan 4 ta raqamdan iborat bo‘lishi kerak.';return}if(first===null){first=v;input.value='';render();return}if(v!==first){err.textContent='PIN-kodlar mos kelmadi.';first=null;input.value='';render();return}btn.disabled=true;try{const h=await hashPin(v);const currentUser=verifiedUser||null;const current=currentUser?{data:{user:currentUser},error:null}:await getClient().auth.getUser();if(current.error)throw current.error;const{error}=await getClient().auth.updateUser({password:h,data:{...(current.data?.user?.user_metadata||{}),qarzniuz_pin_hash:h}});if(error)throw error;p.remove();await finishLogin(current.data.user,verifiedSession,isRegistration);}catch(e){console.error('QarzniUz set PIN:',e);err.textContent=e?.message||'PIN-kodni saqlashda xatolik. Qayta urinib ko‘ring.';btn.disabled=false;}};input.addEventListener('input',()=>input.value=input.value.replace(/\D/g,'').slice(0,4));input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click()});}
+    let first=null;const render=()=>{const c=first!==null;title.textContent=c?'PIN-kodni tasdiqlang':'Yangi PIN-kod yarating';hint.textContent=c?'Xuddi shu 4 xonali PIN-kodni yana kiriting.':'Keyingi kirishlarda telefon raqami bilan birga shu PIN-kod ishlatiladi.';btn.textContent=c?'PIN-kodni saqlash':'Davom etish';};render();input.focus();btn.onclick=async()=>{const v=input.value.replace(/\D/g,'');err.textContent='';if(!/^\d{4}$/.test(v)){err.textContent='PIN-kod aynan 4 ta raqamdan iborat bo‘lishi kerak.';return}if(first===null){first=v;input.value='';render();return}if(v!==first){err.textContent='PIN-kodlar mos kelmadi.';first=null;input.value='';render();return}btn.disabled=true;try{const h=await hashPin(v);const currentUser=verifiedUser||null;const current=currentUser?{data:{user:currentUser},error:null}:await getClient().auth.getUser();if(current.error)throw current.error;const{error}=await getClient().auth.updateUser({password:h,data:{...(current.data?.user?.user_metadata||{}),qarzniuz_pin_hash:h}});
+      if(error){
+        // Supabase rejects setting the password to the same value as the existing
+        // password. This can happen when a user restarts registration after an
+        // earlier successful/partial attempt. Verify that the entered PIN already
+        // is the current password; if so, continue instead of treating it as a
+        // registration failure.
+        const samePassword=/different from the old password|same.*password|new password.*old password/i.test(error.message||'');
+        if(isRegistration&&samePassword){
+          const verified=await getClient().auth.signInWithPassword({phone:state?.phone||'',password:h});
+          if(!verified.error&&verified.data?.user&&verified.data?.session){
+            p.remove();
+            await finishLogin(verified.data.user,verified.data.session,true);
+            return;
+          }
+        }
+        throw error;
+      }
+      p.remove();await finishLogin(current.data.user,verifiedSession,isRegistration);}catch(e){console.error('QarzniUz set PIN:',e);err.textContent=e?.message||'PIN-kodni saqlashda xatolik. Qayta urinib ko‘ring.';btn.disabled=false;}};input.addEventListener('input',()=>input.value=input.value.replace(/\D/g,'').slice(0,4));input.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click()});}
   async function openShopPanel(user){
     try{
       const {data:{session}}=await getClient().auth.getSession();
