@@ -100,7 +100,8 @@
         access_token: session.access_token,
         refresh_token: session.refresh_token || null
       }));
-      window.location.href='/shop.html';
+      // Owner uses the management panel; Seller works directly in the main app.
+    window.location.href = serverRole === 'OWNER' ? '/shop.html' : '/?main=1';
       return true;
     }catch(e){
       console.error('QarzniUz shop handoff:',e);
