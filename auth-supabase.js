@@ -247,6 +247,6 @@
     if(error) throw error;
     return data?.user;
   }
-  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI,setPinForCurrentUser,logout:async function(){sessionStorage.removeItem(OTP_STATE_KEY);try{await getClient().auth.signOut({scope:'local'});}catch(_){} }};
+  window.QarzniUzAuth={loginWithPin,startRecovery,sendRegistrationOtp,verifyOtp,updateUI,setPinForCurrentUser,getCurrentSession,logout:async function(){sessionStorage.removeItem(OTP_STATE_KEY);try{await getClient().auth.signOut({scope:'local'});}catch(_){} }};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
