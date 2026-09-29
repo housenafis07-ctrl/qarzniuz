@@ -30,16 +30,16 @@ alter table public.shop_audit_logs enable row level security;
 
 drop policy if exists qz_shops_select on public.shops;
 create policy qz_shops_select on public.shops
-for select using (owner_id = auth.uid() or public.qz_shop_role(id) is not null);
+for select using (owner_user_id = auth.uid() or public.qz_shop_role(id) is not null);
 
 drop policy if exists qz_shops_insert on public.shops;
 create policy qz_shops_insert on public.shops
-for insert with check (owner_id = auth.uid());
+for insert with check (owner_user_id = auth.uid());
 
 drop policy if exists qz_shops_update on public.shops;
 create policy qz_shops_update on public.shops
-for update using (owner_id = auth.uid())
-with check (owner_id = auth.uid());
+for update using (owner_user_id = auth.uid())
+with check (owner_user_id = auth.uid());
 
 drop policy if exists qz_shop_members_select on public.shop_members;
 create policy qz_shop_members_select on public.shop_members
@@ -54,7 +54,7 @@ for insert with check (
     and exists (
       select 1 from public.shops s
       where s.id = shop_members.shop_id
-        and s.owner_id = auth.uid()
+        and s.owner_user_id = auth.uid()
     )
   )
   or (role = 'SELLER' and public.qz_shop_role(shop_id) = 'OWNER')
