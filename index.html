@@ -546,7 +546,7 @@
                 btnLogout: "🚪 Vykhod",
                 shopManagement: "🏪 Upravlenie magazinom",
                 supportContact: "✈️ Obrashchenie",
-                profileTitle: "👤 MOY PROFIL", profileInfo: "👤 Moi dannye", profileDebtors: "📋 Dolgi magazina", profileDebtorsSub: "Obshchiy spisok dolzhnikov dlya vsekh prodavtsov.", profileHistory: "🕒 Istoriya izmeneniy", profileHistorySub: "Kto, kogda i chto izmenil.", profileExcel: "📊 Skachat Excel", profilePin: "🔐 Izmenit PIN-kod",
+                profileTitle: "👤 МОЙ ПРОФИЛЬ", profileInfo: "👤 МОИ ДАННЫЕ", profileDebtors: "📋 ДОЛЖНИКИ МАГАЗИНА", profileDebtorsSub: "Общий список должников для всех продавцов.", profileHistory: "🕒 ИСТОРИЯ ИЗМЕНЕНИЙ", profileHistorySub: "Кто, когда и что изменил.", profileExcel: "📊 СКАЧАТЬ EXCEL", profilePin: "🔐 ИЗМЕНИТЬ PIN-КОД",
                 totalDebt: "OBSHCHAYA ZADOLZHENNOST",
                 searchPlaceholder: "🔍 Poisk...",
                 optAll: "Vse",
@@ -827,24 +827,36 @@
                 const debts = p.debts || [];
                 const payments = p.payments || [];
                 const audit = p.audit || [];
+                const activeLabel = currentLang === 'ru' ? 'Активен' : 'Faol';
+                const sellerRole = currentLang === 'ru' ? 'Продавец' : 'Sotuvchi';
+                const statusLabel = currentLang === 'ru' ? 'Состояние' : 'Holat';
+                const nameLabel = currentLang === 'ru' ? 'Имя' : 'Ism';
+                const phoneLabel = currentLang === 'ru' ? 'Телефон' : 'Telefon';
+                const shopLabel = currentLang === 'ru' ? 'Магазин' : 'Do‘kon';
+                const customerLabel = currentLang === 'ru' ? 'Клиент' : 'Mijoz';
+                const balanceLabel = currentLang === 'ru' ? 'Остаток' : 'Qoldiq';
+                const lastActionLabel = currentLang === 'ru' ? 'Последняя операция' : 'Oxirgi amal';
+                const timeLabel = currentLang === 'ru' ? 'Время' : 'Vaqt';
+                const whoLabel = currentLang === 'ru' ? 'Кто' : 'Kim';
+                const actionLabel = currentLang === 'ru' ? 'Операция' : 'Amal';
                 document.getElementById('seller-profile-summary').innerHTML =
-                    '🟢 Faol · <b>' + esc(m.full_name || currentUser?.name || '—') + '</b> · ' + esc(p.shop?.name || currentUser?.shopName || '—');
+                    '🟢 '+activeLabel+' · <b>' + esc(m.full_name || currentUser?.name || '—') + '</b> · ' + esc(p.shop?.name || currentUser?.shopName || '—');
                 document.getElementById('seller-profile-info').innerHTML =
-                    '<b>Ism:</b> '+esc(m.full_name||currentUser?.name||'—')+'<br>'+
-                    '<b>Telefon:</b> '+esc(m.phone||currentUser?.phone||'—')+'<br>'+
-                    '<b>Rol:</b> Sotuvchi<br>'+
-                    '<b>Do‘kon:</b> '+esc(p.shop?.name||'—')+'<br>'+
-                    '<b>Holat:</b> 🟢 '+esc(m.status||'active');
+                    '<b>'+nameLabel+':</b> '+esc(m.full_name||currentUser?.name||'—')+'<br>'+
+                    '<b>'+phoneLabel+':</b> '+esc(m.phone||currentUser?.phone||'—')+'<br>'+
+                    '<b>Роль:</b> '+sellerRole+'<br>'+
+                    '<b>'+shopLabel+':</b> '+esc(p.shop?.name||'—')+'<br>'+
+                    '<b>'+statusLabel+':</b> 🟢 '+activeLabel;
                 const active = customers.filter(x=>Number(x.balance||0)>0.009);
                 document.getElementById('seller-profile-debtors').innerHTML =
-                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Mijoz</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Qoldiq</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Oxirgi amal</th></tr>'+
+                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+customerLabel+'</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+balanceLabel+'</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+lastActionLabel+'</th></tr>'+
                     active.map(x=>{const d=debts.filter(y=>y.customer_id===x.id).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; const pp=payments.filter(y=>y.customer_id===x.id).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; const last=[d,pp].filter(Boolean).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0]; return '<tr><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.full_name||'—')+'</td><td style="padding:7px;border-bottom:1px solid #eee;color:#dc2626;font-weight:700">'+Number(x.balance||0).toLocaleString()+' so‘m</td><td style="padding:7px;border-bottom:1px solid #eee">'+(last?esc(String(last.created_at||'').replace('T',' ').slice(0,16)):'—')+'</td></tr>'}).join('')+
                     '</table>';
                 document.getElementById('seller-profile-audit').innerHTML =
-                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Vaqt</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Kim</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">Amal</th></tr>'+
+                    '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+timeLabel+'</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+whoLabel+'</th><th style="text-align:left;padding:7px;border-bottom:1px solid #ddd">'+actionLabel+'</th></tr>'+
                     audit.map(x=>'<tr><td style="padding:7px;border-bottom:1px solid #eee">'+esc(String(x.created_at||'').replace('T',' ').slice(0,16))+'</td><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.actor_name||x.actor_user_id||'—')+'</td><td style="padding:7px;border-bottom:1px solid #eee">'+esc(x.action||'—')+'</td></tr>').join('')+'</table>';
                 window.__sellerProfileReport=p;
-            } catch(e) { alert(e.message||'Profilni yuklab bo‘lmadi'); }
+            } catch(e) { alert(e.message||L('profileTitle')); }
         }
 
         function downloadSellerProfileExcel() {
