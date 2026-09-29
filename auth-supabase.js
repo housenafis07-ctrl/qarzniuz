@@ -199,7 +199,7 @@
     // OWNER and SELLER now enter the shared-shop application directly.
     // The legacy localStorage-only debt screen must not become the primary
     // entry point because it isolates data by phone instead of shop.
-    window.location.href='/shop.html';
+    window.location.href = serverRole === 'OWNER' ? '/shop.html' : '/?main=1&from=login';
   }
   async function verifyOtp(){const s=readState(),code=String(document.getElementById('qarzniuz-otp-code')?.value||'').replace(/\D/g,'');if(!s||!/^[0-9]{6}$/.test(code))return status('6 xonali SMS kodni kiriting.',false);try{const{data,error}=await getClient().auth.verifyOtp({phone:s.phone,token:code,type:'sms'});if(error)throw error;if(!data?.session?.access_token)throw new Error('SMS tasdiqlandi, lekin sessiya yaratilmadi.');if(!data?.user)throw new Error('SMS tasdiqlandi, lekin foydalanuvchi sessiyasi yaratilmadi.');await getClient().auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});await setPin(data.user,data.session,s.mode==='register');}catch(e){console.error('QarzniUz OTP:',e);status(e?.message||'SMS kod noto‘g‘ri yoki muddati tugagan.',false)}}
   function installButtonGuard(){
