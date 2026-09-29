@@ -878,23 +878,25 @@
         }
 
         async function restoreCurrentUserFromSession() {
-            // Returning from the shop panel must keep the authenticated user in
-            // the main app. The PIN unlock marker is session-scoped, while the
-            // Supabase session supplies the authoritative identity.
+            // Returning from shop.html must reuse the authenticated Supabase session.
+            // Do not depend on the auth helper export or localStorage for identity.
             if (currentUser || sessionStorage.getItem('qarzniuz_pin_unlocked') !== '1') return false;
             try {
-                const auth = window.QarzniUzAuth;
-                if (!auth?.getCurrentSession) return false;
-                const session = await auth.getCurrentSession();
-                if (!session?.access_token) return false;
+                const client = supabaseClient || window.supabase?.createClient?.(
+                    'https://yzicsoyufdghwiezqjsa.supabase.co',
+                    'sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM'
+                );
+                if (!client) return false;
+                const {data: sessionData, error: sessionError} = await client.auth.getSession();
+                if (sessionError || !sessionData?.session?.access_token) return false;
+                const token = sessionData.session.access_token;
                 const r = await fetch('/api/shop?action=bootstrap', {
-                    headers: { 'Authorization': 'Bearer ' + session.access_token },
+                    headers: { Authorization: 'Bearer ' + token },
                     cache: 'no-store'
                 });
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok || !j.ok || !j.data?.member || !j.data?.shop) return false;
-
-                const user = j.data.user || {};
+                const user = j.data.user || sessionData.session.user || {};
                 currentUser = {
                     id: user.id,
                     phone: String(user.phone || '').replace(/\\D/g, ''),
@@ -905,6 +907,7 @@
                 localStorage.setItem('shop_user', JSON.stringify(currentUser));
                 localStorage.setItem('qarzniuz_shop_role', currentUser.role);
                 localStorage.setItem('qarzniuz_shop_role_phone', currentUser.phone);
+                sessionStorage.removeItem('qarzniuz_return_main');
                 return true;
             } catch (e) {
                 console.warn('QarzniUz main-app session restore:', e);
