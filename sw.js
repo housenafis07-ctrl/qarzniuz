@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qarzniuz-v21';
+const CACHE_NAME = 'qarzniuz-v22';
 
 const STATIC_ASSETS = [
   '/',
@@ -115,5 +115,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(caches.match(request).then((cachedResponse) => cachedResponse || fetch(request)));
+  // Never let old cached frontend assets hide a new deployment.
+  // Use network-first for same-origin GET requests and keep a cache fallback
+  // for offline use. Cross-origin resources (e.g. CDN) stay network-only.
+  if (request.method === 'GET' && new URL(request.url).origin === self.location.origin) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone()));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cachedResponse) => cachedResponse || Response.error()))
+    );
+    return;
+  }
+
+  event.respondWith(fetch(request));
 });
