@@ -163,7 +163,7 @@ def bootstrap(user):
     # row happens to be returned first.
     owned = one(
         "shops",
-        {"owner_id": "eq." + uid, "select": "*", "order": "created_at.asc", "limit": "1"},
+        {"owner_user_id": "eq." + uid, "select": "*", "order": "created_at.asc", "limit": "1"},
     )
     if owned:
         # If this is a fresh Owner registration and a legacy/default shop already
@@ -230,7 +230,7 @@ def bootstrap(user):
     if meta.get("qz_registration_intent") == "OWNER":
         shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
         shop = rest(
-            "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
+            "POST", "shops", {"name": shop_name, "owner_user_id": uid, "status": "active"}
         )[0]
         member = rest(
             "POST",
@@ -267,7 +267,7 @@ def bootstrap(user):
     # First login without an explicit registration intent also bootstraps Owner.
     shop_name = str(meta.get("shop_name") or "Mening Do'konim").strip()[:160]
     shop = rest(
-        "POST", "shops", {"name": shop_name, "owner_id": uid, "status": "active"}
+        "POST", "shops", {"name": shop_name, "owner_user_id": uid, "status": "active"}
     )[0]
     member = rest(
         "POST",
