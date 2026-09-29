@@ -92,6 +92,35 @@ def rest(method, table, query=None, body=None, prefer=None):
         raise RuntimeError(detail[:1000])
 
 
+
+def rpc(function_name, body):
+    """Call a Supabase PostgreSQL RPC using the current user's JWT.
+
+    The service-role key is used only as the API key when configured; the
+    Authorization bearer remains the authenticated user's JWT so auth.uid()
+    is available inside SECURITY DEFINER functions.
+    """
+    key = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
+    bearer = REQUEST_ACCESS_TOKEN.get() or SUPABASE_SERVICE_KEY
+    if not key or not bearer:
+        raise RuntimeError("Supabase server konfiguratsiyasi to‘liq emas")
+    url = SUPABASE_URL + "/rest/v1/rpc/" + function_name
+    raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=raw, method="POST")
+    req.add_header("apikey", key)
+    req.add_header("Authorization", "Bearer " + bearer)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    req.add_header("Prefer", "return=representation")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            text = r.read().decode("utf-8")
+            return json.loads(text) if text else None
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(detail[:1000])
+
+
 def one(table, query):
     rows = rest("GET", table, query)
     return rows[0] if rows else None
@@ -217,8 +246,7 @@ def bootstrap(user):
         if pending:
             updated = rest(
                 "PATCH",
-                "shop_members",
-                {"id": "eq." + pending["id"]},
+                "shop_members",                {"id": "eq." + pending["id"]},
                 {"user_id": uid, "status": "active"},
             )
             member = updated[0] if updated else pending
@@ -437,8 +465,7 @@ def import_legacy_customers(shop_id, user_id, actor_name, legacy):
                 "date": old.get("dateGiven"),
                 "type": "Dastlabki qarz",
                 "amount": old.get("amount"),
-                "item": old.get("note") or "Eski qarz",
-            }]
+                "item": old.get("note") or "Eski qarz",            }]
 
         for event in history:
             try:
@@ -619,16 +646,19 @@ class handler(BaseHTTPRequestHandler):
                 cid, amount = str(body.get("customer_id", "")), float(body.get("amount") or 0)
                 if amount <= 0:
                     raise RuntimeError("To'lov summasi 0 dan katta bo'lishi kerak")
-                if not one("shop_customers", {"id": "eq." + cid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"}):
-                    raise RuntimeError("Mijoz topilmadi")
-                balance = customer_balance(shop["id"], cid)
-                if balance <= 0:
-                    raise RuntimeError("Bu mijozda faol qarz yo'q")
-                if amount > balance + 0.009:
-                    raise RuntimeError("To'lov qoldiq qarzdan katta bo'lishi mumkin emas")
-                row = rest("POST", "shop_payments", {"shop_id": shop["id"], "customer_id": cid, "debt_id": body.get("debt_id") or None, "amount": amount, "note": str(body.get("note", "")).strip()[:500] or None, "created_by": user["id"]})[0]
-                audit(shop["id"], user["id"], member["full_name"], "CREATE", "PAYMENT", row["id"], None, row)
-                send_json(self, {"ok": True, "data": row})
+                result = rpc(
+                    "qz_record_payment",
+                    {
+                        "p_shop_id": shop["id"],
+                        "p_customer_id": cid,
+                        "p_debt_id": body.get("debt_id") or None,
+                        "p_amount": amount,
+                        "p_note": str(body.get("note", "")).strip()[:500] or None,
+                    },
+                )
+                if not isinstance(result, dict) or not result.get("payment"):
+                    raise RuntimeError("To'lovni saqlashda kutilmagan javob olindi")
+                send_json(self, {"ok": True, "data": result["payment"], "balance": result.get("balance")})
                 return
             if action == "seller_invite":
                 if member["role"] != "OWNER":
@@ -657,8 +687,7 @@ class handler(BaseHTTPRequestHandler):
             if action == "seller_status":
                 if member["role"] != "OWNER":
                     raise PermissionError("Faqat OWNER")
-                mid, status = str(body.get("member_id", "")), str(body.get("status", ""))
-                if status not in ("active", "disabled", "pending"):
+                mid, status = str(body.get("member_id", "")), str(body.get("status", ""))                if status not in ("active", "disabled", "pending"):
                     raise RuntimeError("Status noto'g'ri")
                 target = one("shop_members", {"id": "eq." + mid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
                 if not target or target.get("role") != "SELLER":
