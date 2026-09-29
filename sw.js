@@ -53,7 +53,7 @@ function patchHtml(html) {
                 return;
             }
 
-            window.location.href = '/TemirDaftar.apk';
+            window.location.href = '/QarzniUz.apk';
         }
 
         /* ---- Bosh ekranga qo'shish (haqiqiy PWA fayllarsiz, oddiy yo'riqnoma) ---- */
