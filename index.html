@@ -877,7 +877,43 @@
             else alert('PIN o‘zgartirish funksiyasi mavjud emas.');
         }
 
+        async function restoreCurrentUserFromSession() {
+            // Returning from the shop panel must keep the authenticated user in
+            // the main app. The PIN unlock marker is session-scoped, while the
+            // Supabase session supplies the authoritative identity.
+            if (currentUser || sessionStorage.getItem('qarzniuz_pin_unlocked') !== '1') return false;
+            try {
+                const auth = window.QarzniUzAuth;
+                if (!auth?.getCurrentSession) return false;
+                const session = await auth.getCurrentSession();
+                if (!session?.access_token) return false;
+                const r = await fetch('/api/shop?action=bootstrap', {
+                    headers: { 'Authorization': 'Bearer ' + session.access_token },
+                    cache: 'no-store'
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !j.ok || !j.data?.member || !j.data?.shop) return false;
+
+                const user = j.data.user || {};
+                currentUser = {
+                    id: user.id,
+                    phone: String(user.phone || '').replace(/\\D/g, ''),
+                    name: j.data.member.full_name || user.user_metadata?.full_name || 'Foydalanuvchi',
+                    shopName: j.data.shop.name || user.user_metadata?.shop_name || '',
+                    role: String(j.data.member.role || '').toUpperCase()
+                };
+                localStorage.setItem('shop_user', JSON.stringify(currentUser));
+                localStorage.setItem('qarzniuz_shop_role', currentUser.role);
+                localStorage.setItem('qarzniuz_shop_role_phone', currentUser.phone);
+                return true;
+            } catch (e) {
+                console.warn('QarzniUz main-app session restore:', e);
+                return false;
+            }
+        }
+
         async function initApp() {
+            await restoreCurrentUserFromSession();
             setLanguage(currentLang);
             setupRoleUI();
             updateShopManagementVisibility(currentUser);
