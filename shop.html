@@ -63,6 +63,12 @@ async function start(){
   if(!session || !pinUnlocked){document.getElementById('login').classList.remove('hidden');return}
   try{
     ctx=await api('/api/shop?action=bootstrap');
+    // Sellers never use the shop-management panel. If a seller reaches this
+    // URL directly or from an old cached route, send them to the main app.
+    if(String(ctx.member?.role||'').toUpperCase()==='SELLER'){
+      window.location.replace('/?main=1&from=shop');
+      return;
+    }
     await migrateLegacyData();
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('shopmini').innerHTML='<b>'+esc(ctx.shop.name)+'</b><br><span style="color:#94a3b8">'+esc(ctx.member.full_name)+' · '+ctx.member.role+'</span>';
