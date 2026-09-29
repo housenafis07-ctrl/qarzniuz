@@ -687,7 +687,8 @@ class handler(BaseHTTPRequestHandler):
             if action == "seller_status":
                 if member["role"] != "OWNER":
                     raise PermissionError("Faqat OWNER")
-                mid, status = str(body.get("member_id", "")), str(body.get("status", ""))                if status not in ("active", "disabled", "pending"):
+                mid, status = str(body.get("member_id", "")), str(body.get("status", ""))
+                if status not in ("active", "disabled", "pending"):
                     raise RuntimeError("Status noto'g'ri")
                 target = one("shop_members", {"id": "eq." + mid, "shop_id": "eq." + shop["id"], "select": "*", "limit": "1"})
                 if not target or target.get("role") != "SELLER":
