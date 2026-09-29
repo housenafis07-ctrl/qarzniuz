@@ -422,7 +422,7 @@
             ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
             : null;
 
-        let currentUser = JSON.parse(localStorage.getItem('shop_user')) || null;
+        let currentUser = null; // Never trust localStorage as an authentication state. PIN/Supabase login must unlock each new app session.
         let customers = [];
         let authMode = 'login';
         let currentLang = localStorage.getItem('app_lang') || 'uz';
@@ -1069,6 +1069,7 @@
                 localStorage.removeItem('shop_user');
                 localStorage.removeItem('qarzniuz_shop_role');
                 localStorage.removeItem('qarzniuz_shop_role_phone');
+                sessionStorage.removeItem('qarzniuz_pin_unlocked');
                 currentUser = null;
                 customers = [];
                 try {

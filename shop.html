@@ -36,6 +36,11 @@ async function api(path,body){
   return j.data;
 }
 async function start(){
+  // Supabase keeps its auth session for token refresh, but QarzniUz requires a
+  // fresh PIN unlock when the app/tab is opened again. sessionStorage is cleared
+  // when the browsing session ends, so a persisted Supabase token cannot by itself
+  // open the shop panel.
+  const pinUnlocked=sessionStorage.getItem('qarzniuz_pin_unlocked')==='1';
   let {data:{session}}=await sb.auth.getSession();
   if(!session){
     try{
@@ -50,7 +55,7 @@ async function start(){
       }
     }catch(e){console.warn('shop session handoff:',e)}
   }
-  if(!session){document.getElementById('login').classList.remove('hidden');return}
+  if(!session || !pinUnlocked){document.getElementById('login').classList.remove('hidden');return}
   try{
     ctx=await api('/api/shop?action=bootstrap');
     await migrateLegacyData();

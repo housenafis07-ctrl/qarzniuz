@@ -179,6 +179,10 @@
     try{localStorage.setItem('qarzniuz_user',JSON.stringify(local))}catch(_){}
     localStorage.setItem('qarzniuz_shop_role',serverRole);
     localStorage.setItem('qarzniuz_shop_role_phone',local.phone);
+    // A successful PIN login/registration unlocks this browser tab. The Supabase
+    // session may persist for refresh/auto-refresh, but localStorage alone must
+    // never bypass the PIN screen after the app is reopened.
+    sessionStorage.setItem('qarzniuz_pin_unlocked','1');
     sessionStorage.removeItem(OTP_STATE_KEY);
     try{if(typeof currentUser!=='undefined')currentUser=local}catch(_){}
     // OWNER and SELLER now enter the shared-shop application directly.
