@@ -163,20 +163,34 @@
     // have a pending invitation for this exact phone number.
     let membership=null;
     try{
-      const {data:{session}}=await getClient().auth.getSession();
-      if(!session?.access_token) throw new Error('Sessiya yaratilmadi');
-      let r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
+      const current=await getClient().auth.getSession();
+      if(current.error) throw current.error;
+      let activeSession=current.data?.session||null;
+      if(!activeSession?.access_token) throw new Error('Sessiya yaratilmadi');
+
+      let r=await fetch('/api/shop?action=bootstrap',{
+        headers:{Authorization:'Bearer '+activeSession.access_token},
+        cache:'no-store'
+      });
       let j=await r.json().catch(()=>({}));
-      // One controlled retry with a fresh access token for old tabs/sessions.
-      if(r.status===401){
-        const refreshed=await getClient().auth.refreshSession({refresh_token:session.refresh_token});
+
+      // A fresh OTP/PIN registration can briefly have an access token that the
+      // backend has not accepted yet. Refresh once and retry with the new token.
+      if(r.status===401&&activeSession.refresh_token){
+        const refreshed=await getClient().auth.refreshSession({
+          refresh_token:activeSession.refresh_token
+        });
         if(!refreshed.error&&refreshed.data?.session){
-          session=refreshed.data.session;
-          if(refreshed.data.user)user=refreshed.data.user;
-          r=await fetch('/api/shop?action=bootstrap',{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'});
+          activeSession=refreshed.data.session;
+          if(refreshed.data.user) user=refreshed.data.user;
+          r=await fetch('/api/shop?action=bootstrap',{
+            headers:{Authorization:'Bearer '+activeSession.access_token},
+            cache:'no-store'
+          });
           j=await r.json().catch(()=>({}));
         }
       }
+
       if(!r.ok||!j.ok) throw new Error(j.error||'Do‘kon a’zoligi topilmadi');
       membership=j.data;
     }catch(e){
