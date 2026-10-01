@@ -1379,20 +1379,45 @@
                 const customer = customers.find(c => c.id === id);
                 if (!customer) return;
 
+                const paymentAmount = Number(customer.amount);
+                if (!(paymentAmount > 0)) {
+                    alert(L('alertPartialExceed') || 'To‘lov summasi noto‘g‘ri.');
+                    return;
+                }
+
+                // Shared-shop payments must be recorded with the original debt
+                // amount. Do not zero the local customer before the API call,
+                // otherwise payment_create receives amount: 0 and the atomic
+                // backend correctly rejects it.
+                if (sharedSeller) {
+                    try {
+                        await sellerApi('/api/shop', {
+                            action: 'payment_create',
+                            customer_id: customer.sharedId,
+                            amount: paymentAmount,
+                            note: 'Qarz to‘liq yopildi'
+                        });
+                        await loadSharedSellerData();
+                    } catch (e) {
+                        alert(e.message || 'To‘lov saqlanmadi');
+                        return;
+                    }
+                    alert(L('alertPayFullDone'));
+                    renderCustomers();
+                    return;
+                }
+
                 if (!customer.history) customer.history = [];
                 const today = new Date().toLocaleDateString();
                 customer.history.push({
                     date: today,
                     type: 'To\'liq To\'lov',
-                    amount: customer.amount,
+                    amount: paymentAmount,
                     item: 'Qarz to\'liq yopildi'
                 });
-
                 customer.amount = 0;
                 customer.archived = true;
-
-                if(sharedSeller){try{await sellerApi('/api/shop',{action:'payment_create',customer_id:customer.sharedId,amount:customer.amount,note:'Qarz to‘liq yopildi'});await loadSharedSellerData();}catch(e){alert(e.message||'To‘lov saqlanmadi');return;}}
-                else saveCustomersToStorage();
+                saveCustomersToStorage();
                 alert(L('alertPayFullDone'));
                 renderCustomers();
             }
