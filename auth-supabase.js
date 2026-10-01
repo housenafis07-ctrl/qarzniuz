@@ -100,8 +100,16 @@
         access_token: session.access_token,
         refresh_token: session.refresh_token || null
       }));
-      // Owner uses the management panel; Seller works directly in the main app.
-    window.location.href = serverRole === 'OWNER' ? '/shop.html' : '/?main=1';
+      // Resolve the role from the authenticated user/local session.
+      // This helper can be invoked from the main app outside finishLogin(),
+      // so the local serverRole variable is not available here.
+      const serverRole=String(
+        user?.role ||
+        user?.shopRole ||
+        localStorage.getItem('qarzniuz_shop_role') ||
+        ''
+      ).toUpperCase();
+      window.location.href = serverRole === 'OWNER' ? '/shop.html' : '/?main=1';
       return true;
     }catch(e){
       console.error('QarzniUz shop handoff:',e);
