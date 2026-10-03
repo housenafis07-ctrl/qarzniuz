@@ -127,7 +127,37 @@
       return null;
     }
   }
-  async function loginWithPin(){const ph=phone(),pv=pin();if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');if(busy)return;busy=true;const btn=document.getElementById('auth-submit-btn');if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...'}try{sessionStorage.removeItem(OTP_STATE_KEY);const h=await hashPin(pv),{data,error}=await getClient().auth.signInWithPassword({phone:ph,password:h});if(error)throw error;if(!data?.user||!data?.session)throw new Error('Auth sessiyasi yaratilmadi.');await finishLogin(data.user,data.session,false);}catch(e){console.error('QarzniUz PIN login:',e);status(e?.message||'Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);}finally{busy=false;if(btn){btn.disabled=false;updateUI();}}}
+  async function loginWithPin(){
+    const ph=phone(),pv=pin();
+    if(!/^\+998\d{9}$/.test(ph))return alert('Iltimos, +998XXXXXXXXX formatida telefon raqamini kiriting.');
+    if(!/^\d{4}$/.test(pv))return alert('4 xonali PIN-kodni kiriting.');
+    if(busy)return;
+    busy=true;
+    const btn=document.getElementById('auth-submit-btn');
+    if(btn){btn.disabled=true;btn.textContent='Kirilmoqda...';}
+    status('Kirish tekshirilmoqda...');
+    try{
+      sessionStorage.removeItem(OTP_STATE_KEY);
+      if(!window.supabase)throw new Error('Supabase kutubxonasi yuklanmadi. Sahifani yangilang.');
+      const h=await hashPin(pv);
+      const authPromise=getClient().auth.signInWithPassword({phone:ph,password:h});
+      const authResult=await Promise.race([
+        authPromise,
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('Kirish serverdan javob kutmoqda. Internet aloqasini tekshiring va qayta urinib ko‘ring.')),15000))
+      ]);
+      const {data,error}=authResult;
+      if(error)throw error;
+      if(!data?.user||!data?.session)throw new Error('Auth sessiyasi yaratilmadi.');
+      status('Akkaunt topildi. Do‘kon ma’lumotlari tekshirilmoqda...');
+      await finishLogin(data.user,data.session,false);
+    }catch(e){
+      console.error('QarzniUz PIN login:',e);
+      status(e?.message||'Telefon yoki PIN-kod noto‘g‘ri. Agar bu eski akkaunt bo‘lsa, “PIN-kodni unutdim” orqali PINni bir marta qayta o‘rnating.',false);
+    }finally{
+      busy=false;
+      if(btn){btn.disabled=false;updateUI();}
+    }
+  }
   async function finishLogin(user,session=null,isRegistration=false){
     if(!user)return;
     const meta=user.user_metadata||{};
@@ -168,10 +198,14 @@
       let activeSession=current.data?.session||null;
       if(!activeSession?.access_token) throw new Error('Sessiya yaratilmadi');
 
-      let r=await fetch('/api/shop?action=bootstrap',{
-        headers:{Authorization:'Bearer '+activeSession.access_token},
-        cache:'no-store'
-      });
+      const bootstrapFetch=(token)=>Promise.race([
+        fetch('/api/shop?action=bootstrap',{
+          headers:{Authorization:'Bearer '+token},
+          cache:'no-store'
+        }),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('Do‘kon serveri javob bermadi. 15 soniyadan so‘ng qayta urinib ko‘ring.')),15000))
+      ]);
+      let r=await bootstrapFetch(activeSession.access_token);
       let j=await r.json().catch(()=>({}));
 
       // A fresh OTP/PIN registration can briefly have an access token that the
@@ -183,10 +217,7 @@
         if(!refreshed.error&&refreshed.data?.session){
           activeSession=refreshed.data.session;
           if(refreshed.data.user) user=refreshed.data.user;
-          r=await fetch('/api/shop?action=bootstrap',{
-            headers:{Authorization:'Bearer '+activeSession.access_token},
-            cache:'no-store'
-          });
+          r=await bootstrapFetch(activeSession.access_token);
           j=await r.json().catch(()=>({}));
         }
       }
