@@ -36,6 +36,39 @@
     <label for="pin">4 xonali PIN-kod</label>
     <input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="current-password">
     <button id="loginBtn">Kirish va Telegram bilan bog‘lash</button>
+    <button id="showRegisterBtn" class="secondary">Yangi akkaunt ochish</button>
+  </section>
+
+  <section id="registerCard" class="card hidden">
+    <h3 style="margin:0 0 4px">Yangi QarzniUz akkaunti</h3>
+    <p class="sub" style="font-size:13px">Telefon raqamingizni SMS orqali tasdiqlang va yangi 4 xonali PIN yarating.</p>
+    <label for="regName">Ism-familiya</label>
+    <input id="regName" type="text" autocomplete="name" placeholder="Ism Familiya">
+    <label for="regShop">Do‘kon nomi</label>
+    <input id="regShop" type="text" autocomplete="organization" placeholder="Masalan: Mahalla Market">
+    <label for="regPhone">Telefon raqami</label>
+    <input id="regPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+998901234567">
+    <button id="registerSendBtn">SMS kod yuborish</button>
+    <button id="backLoginBtn" class="secondary">Kirishga qaytish</button>
+  </section>
+
+  <section id="otpCard" class="card hidden">
+    <h3 style="margin:0 0 4px">SMS kodni tasdiqlash</h3>
+    <p id="otpHint" class="sub" style="font-size:13px"></p>
+    <label for="otpCode">6 xonali SMS kod</label>
+    <input id="otpCode" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456">
+    <button id="verifyOtpBtn">Kodni tasdiqlash</button>
+    <button id="resendOtpBtn" class="secondary">Kodni qayta yuborish</button>
+  </section>
+
+  <section id="pinCard" class="card hidden">
+    <h3 style="margin:0 0 4px">PIN-kod yarating</h3>
+    <p class="sub" style="font-size:13px">Keyingi kirishlarda telefon raqamingiz va shu 4 xonali PIN ishlatiladi.</p>
+    <label for="regPin">Yangi 4 xonali PIN</label>
+    <input id="regPin" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="••••">
+    <label for="regPin2">PIN-kodni takrorlang</label>
+    <input id="regPin2" type="password" inputmode="numeric" maxlength="4" autocomplete="new-password" placeholder="••••">
+    <button id="savePinBtn">PIN-kodni saqlash va kirish</button>
   </section>
 
   <section id="dashboard" class="hidden">
@@ -128,6 +161,110 @@
       }
     }catch(e){setStatus("Xatolik: "+e.message,"error");}
   }
+
+  let registrationPhone = "";
+  let registrationName = "";
+  let registrationShop = "";
+
+  function hideAuthCards(){
+    [loginCard,document.getElementById("registerCard"),document.getElementById("otpCard"),document.getElementById("pinCard")]
+      .forEach(x=>x.classList.add("hidden"));
+  }
+  function showLogin(){
+    hideAuthCards();loginCard.classList.remove("hidden");
+    setStatus("QarzniUz akkauntingizga kiring.");
+  }
+  function regPhone(){return normalizePhone(document.getElementById("regPhone").value);}
+  async function bootstrapAfterAuth(){
+    const {data:{session}}=await supabase.auth.getSession();
+    if(!session?.access_token)throw new Error("Sessiya yaratilmadi.");
+    const headers={Authorization:"Bearer "+session.access_token};
+    const r=await fetch("/api/shop?action=bootstrap",{headers,cache:"no-store"});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok)throw new Error(j.error||"Do‘kon profilini yaratib bo‘lmadi");
+    await linkCurrentSession();
+    hideAuthCards();dashboard.classList.remove("hidden");
+    setStatus("✅ Yangi akkaunt muvaffaqiyatli yaratildi va Telegram bilan ulandi.","ok");
+    await loadData();
+  }
+
+  document.getElementById("showRegisterBtn").onclick=()=>{
+    hideAuthCards();document.getElementById("registerCard").classList.remove("hidden");
+    setStatus("Yangi akkaunt ochish.");
+  };
+  document.getElementById("backLoginBtn").onclick=showLogin;
+
+  document.getElementById("registerSendBtn").onclick=async()=>{
+    const btn=document.getElementById("registerSendBtn");
+    registrationPhone=regPhone();
+    registrationName=document.getElementById("regName").value.trim();
+    registrationShop=document.getElementById("regShop").value.trim();
+    if(!/^\\+998\\d{9}$/.test(registrationPhone))return setStatus("Telefon raqamini +998XXXXXXXXX formatida kiriting.","error");
+    if(!registrationName)return setStatus("Ism-familiyangizni kiriting.","error");
+    if(!registrationShop)return setStatus("Do‘kon nomini kiriting.","error");
+    btn.disabled=true;btn.textContent="Yuborilmoqda...";
+    try{
+      await supabase.auth.signOut({scope:"local"});
+      const {error}=await supabase.auth.signInWithOtp({
+        phone:registrationPhone,
+        options:{
+          shouldCreateUser:true,
+          data:{full_name:registrationName,shop_name:registrationShop,source:"qarzniuz-telegram-mini-app",qz_registration_intent:"OWNER"}
+        }
+      });
+      if(error)throw error;
+      document.getElementById("otpHint").textContent=registrationPhone+" raqamiga SMS kod yuborildi.";
+      hideAuthCards();document.getElementById("otpCard").classList.remove("hidden");
+      setStatus("SMS yuborildi. 6 xonali kodni kiriting.","ok");
+    }catch(e){setStatus("SMS yuborilmadi: "+(e?.message||"noma’lum xatolik"),"error");}
+    finally{btn.disabled=false;btn.textContent="SMS kod yuborish";}
+  };
+
+  document.getElementById("verifyOtpBtn").onclick=async()=>{
+    const btn=document.getElementById("verifyOtpBtn");
+    const code=document.getElementById("otpCode").value.replace(/\\D/g,"");
+    if(!/^\\d{6}$/.test(code))return setStatus("6 xonali SMS kodni kiriting.","error");
+    btn.disabled=true;btn.textContent="Tekshirilmoqda...";
+    try{
+      const {data,error}=await supabase.auth.verifyOtp({phone:registrationPhone,token:code,type:"sms"});
+      if(error)throw error;
+      if(!data?.session?.access_token||!data?.user)throw new Error("SMS tasdiqlandi, lekin sessiya yaratilmadi.");
+      hideAuthCards();document.getElementById("pinCard").classList.remove("hidden");
+      setStatus("✅ Telefon tasdiqlandi. Endi 4 xonali PIN yarating.","ok");
+    }catch(e){setStatus("SMS kodi xato: "+(e?.message||"qayta urinib ko‘ring"),"error");}
+    finally{btn.disabled=false;btn.textContent="Kodni tasdiqlash";}
+  };
+
+  document.getElementById("resendOtpBtn").onclick=async()=>{
+    try{
+      const {error}=await supabase.auth.signInWithOtp({
+        phone:registrationPhone,
+        options:{shouldCreateUser:true,data:{full_name:registrationName,shop_name:registrationShop,source:"qarzniuz-telegram-mini-app",qz_registration_intent:"OWNER"}}
+      });
+      if(error)throw error;setStatus("Yangi SMS kod yuborildi.","ok");
+    }catch(e){setStatus("SMS qayta yuborilmadi: "+(e?.message||"xatolik"),"error");}
+  };
+
+  document.getElementById("savePinBtn").onclick=async()=>{
+    const btn=document.getElementById("savePinBtn");
+    const p1=document.getElementById("regPin").value.replace(/\\D/g,"");
+    const p2=document.getElementById("regPin2").value.replace(/\\D/g,"");
+    if(!/^\\d{4}$/.test(p1))return setStatus("PIN-kod aynan 4 ta raqam bo‘lishi kerak.","error");
+    if(p1!==p2)return setStatus("PIN-kodlar mos kelmadi.","error");
+    btn.disabled=true;btn.textContent="Saqlanmoqda...";
+    try{
+      const h=await sha256(p1);
+      const {data,error}=await supabase.auth.updateUser({
+        password:h,
+        data:{full_name:registrationName,shop_name:registrationShop,qz_registration_intent:"OWNER",qarzniuz_pin_hash:h}
+      });
+      if(error)throw error;
+      if(data?.user){
+        await bootstrapAfterAuth();
+      }else throw new Error("Foydalanuvchi sessiyasi topilmadi.");
+    }catch(e){setStatus("Xatolik: "+(e?.message||"PIN saqlanmadi"),"error");}
+    finally{btn.disabled=false;btn.textContent="PIN-kodni saqlash va kirish";}
+  };
 
   document.getElementById("loginBtn").onclick=async()=>{
     const btn=document.getElementById("loginBtn");
