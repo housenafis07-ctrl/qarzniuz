@@ -135,10 +135,10 @@ def require_supabase_user(h):
 
 
 def postgrest_eq(value):
-    # Quote filter values so PostgREST parses the operator/value boundary
-    # consistently for numeric IDs as well as UUIDs.
+    # PostgREST expects eq.<value>. Do not quote numeric bigint IDs:
+    # eq."38234907" makes PostgreSQL receive the literal quotes.
     safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return 'eq."' + safe + '"'
+    return "eq." + safe
 
 
 def get_link(telegram_user_id):
