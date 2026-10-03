@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler
