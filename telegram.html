@@ -3,58 +3,158 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
   <title>QarzniUz — Telegram</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root { color-scheme: light; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:Inter,system-ui,-apple-system,sans-serif; background:#f5f7f9; color:#17202a; }
-    main { max-width:560px; margin:0 auto; padding:24px 16px 40px; }
-    .card { background:#fff; border-radius:20px; padding:22px; box-shadow:0 8px 30px rgba(0,0,0,.06); }
-    h1 { margin:0 0 8px; font-size:26px; }
-    p { color:#667085; line-height:1.5; }
-    button { width:100%; border:0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700; background:#1789e6; color:#fff; }
-    .status { margin:16px 0; padding:12px; border-radius:12px; background:#f2f4f7; font-size:14px; }
+    :root{color-scheme:light;--primary:#2563eb;--bg:#f5f7fb;--text:#17202a;--muted:#667085;--danger:#ef4444}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:560px;margin:0 auto;padding:16px 14px 32px}.card{background:#fff;border-radius:18px;padding:18px;margin-bottom:12px;box-shadow:0 5px 24px rgba(0,0,0,.06)}
+    h1{margin:0;font-size:25px}.sub{color:var(--muted);margin:5px 0 0}.status{padding:11px 12px;border-radius:11px;background:#f1f5f9;font-size:14px;margin-top:14px}
+    label{display:block;font-size:13px;font-weight:700;margin:12px 0 5px}input{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px}
+    button{width:100%;border:0;border-radius:11px;padding:13px 15px;font-size:15px;font-weight:700;background:var(--primary);color:#fff;margin-top:12px}
+    button.secondary{background:#e2e8f0;color:#334155}.error{background:#fef2f2;color:#b91c1c}.ok{background:#f0fdf4;color:#166534}
+    .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{background:#f8fafc;border-radius:13px;padding:14px}.stat b{display:block;font-size:20px;margin-top:4px}
+    .customer{border-top:1px solid #eef2f7;padding:13px 0}.customer:first-child{border-top:0}.row{display:flex;justify-content:space-between;gap:10px}.name{font-weight:800}.amount{font-weight:800;color:var(--danger)}.muted{font-size:12px;color:var(--muted);margin-top:4px}
+    .hidden{display:none!important}
   </style>
 </head>
 <body>
 <main>
   <section class="card">
     <h1>QarzniUz</h1>
-    <p>Telegram Mini App</p>
+    <p class="sub">Telegram Mini App</p>
     <div id="status" class="status">Telegram sessiyasi tekshirilmoqda...</div>
-    <button id="open" hidden>QarzniUz saytini ochish</button>
+  </section>
+
+  <section id="loginCard" class="card hidden">
+    <h3 style="margin:0 0 4px">QarzniUz akkauntiga kirish</h3>
+    <p class="sub" style="font-size:13px">Mavjud telefon raqamingiz va 4 xonali PIN-kodingizdan foydalaning.</p>
+    <label for="phone">Telefon raqami</label>
+    <input id="phone" type="tel" inputmode="tel" placeholder="+998901234567" autocomplete="tel">
+    <label for="pin">4 xonali PIN-kod</label>
+    <input id="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autocomplete="current-password">
+    <button id="loginBtn">Kirish va Telegram bilan bog‘lash</button>
+  </section>
+
+  <section id="dashboard" class="hidden">
+    <div class="card">
+      <div class="row">
+        <div><h3 id="shopName" style="margin:0">—</h3><div id="memberName" class="muted">—</div></div>
+        <button id="refreshBtn" style="width:auto;margin:0;padding:9px 12px">↻</button>
+      </div>
+    </div>
+    <div class="card stats">
+      <div class="stat"><span class="muted">Mijozlar</span><b id="customerCount">0</b></div>
+      <div class="stat"><span class="muted">Jami qarz</span><b id="debtTotal">0 so‘m</b></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Qarzdorlar</h3>
+      <div id="customers"><div class="muted">Yuklanmoqda...</div></div>
+    </div>
+    <div class="card"><button id="logoutBtn" class="secondary">Telegram Mini App'dan chiqish</button></div>
   </section>
 </main>
+
 <script>
 (() => {
+  const SUPABASE_URL = "https://yzicsoyufdghwiezqjsa.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM";
   const tg = window.Telegram?.WebApp;
   const status = document.getElementById("status");
-  const open = document.getElementById("open");
+  const loginCard = document.getElementById("loginCard");
+  const dashboard = document.getElementById("dashboard");
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}
+  });
 
-  if (!tg || !tg.initData) {
-    status.textContent = "Mini App Telegram ichidan ochilishi kerak.";
-    return;
+  function setStatus(text,type=""){status.textContent=text;status.className="status "+type;}
+  function normalizePhone(v){const d=String(v||"").replace(/\D/g,"");if(d.startsWith("998"))return "+"+d;if(d.startsWith("8")&&d.length===9)return "+998"+d;if(d.length===9)return "+998"+d;return "+"+d;}
+  async function sha256(v){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,"0")).join("");}
+  async function miniStatus(){
+    const r=await fetch("/api/telegram-mini-app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",initData:tg.initData}),cache:"no-store"});
+    const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Telegram sessiyasi tekshirilmadi");return j.data;
+  }
+  async function linkCurrentSession(){
+    const {data:{session}}=await supabase.auth.getSession();
+    if(!session?.access_token)throw new Error("QarzniUz sessiyasi topilmadi.");
+    const r=await fetch("/api/telegram-mini-app",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify({action:"link",initData:tg.initData}),cache:"no-store"});
+    const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error||"Akkauntni bog‘lab bo‘lmadi");return j.data;
+  }
+  async function loadData(){
+    const {data:{session}}=await supabase.auth.getSession();
+    if(!session?.access_token)throw new Error("Sessiya topilmadi. Qayta kiring.");
+    const headers={Authorization:"Bearer "+session.access_token};
+    const [b,d]=await Promise.all([
+      fetch("/api/shop?action=bootstrap",{headers,cache:"no-store"}),
+      fetch("/api/shop?action=data",{headers,cache:"no-store"})
+    ]);
+    const bj=await b.json(),dj=await d.json();
+    if(!b.ok||!bj.ok)throw new Error(bj.error||"Do‘kon ma’lumotlari olinmadi");
+    if(!d.ok||!dj.ok)throw new Error(dj.error||"Qarzlar olinmadi");
+    const customers=dj.data.customers||[];
+    const active=customers.filter(c=>c.status==="active"&&Number(c.balance||0)>0.009);
+    const total=active.reduce((s,c)=>s+Number(c.balance||0),0);
+    document.getElementById("shopName").textContent=bj.data.shop?.name||"QarzniUz";
+    document.getElementById("memberName").textContent=(bj.data.member?.full_name||"Foydalanuvchi")+" · "+(bj.data.member?.role||"");
+    document.getElementById("customerCount").textContent=customers.length;
+    document.getElementById("debtTotal").textContent=new Intl.NumberFormat("uz-UZ").format(total)+" so‘m";
+    const box=document.getElementById("customers");
+    if(!active.length){box.innerHTML='<div class="muted">Faol qarzdorlar yo‘q.</div>';return;}
+    box.innerHTML=active.slice().sort((a,b)=>Number(b.balance||0)-Number(a.balance||0)).map(c =>
+      '<div class="customer"><div class="row"><div class="name">'+escapeHtml(c.full_name||"Noma’lum")+'</div><div class="amount">'+fmt(c.balance)+'</div></div>'+
+      '<div class="muted">'+escapeHtml(c.phone||"Telefon ko‘rsatilmagan")+'</div></div>'
+    ).join("");
+  }
+  function fmt(v){return new Intl.NumberFormat("uz-UZ").format(Number(v||0))+" so‘m";}
+  function escapeHtml(v){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]||m));}
+
+  async function start(){
+    if(!tg||!tg.initData){setStatus("Mini App Telegram ichidan ochilishi kerak.");return;}
+    tg.ready();tg.expand();
+    try{
+      const s=await miniStatus();
+      const {data:{session}}=await supabase.auth.getSession();
+      if(s.linked&&session?.access_token){
+        setStatus("✅ Telegram va QarzniUz akkauntingiz ulangan.","ok");
+        dashboard.classList.remove("hidden");await loadData();
+      }else if(s.linked){
+        setStatus("Akkauntingiz ulangan. Mini App'ga kirish uchun PIN-kodni kiriting.","ok");
+        loginCard.classList.remove("hidden");
+      }else{
+        setStatus("Telegram akkauntingiz QarzniUz bilan hali ulanmagan. Kirish orqali bog‘laymiz.");
+        loginCard.classList.remove("hidden");
+      }
+    }catch(e){setStatus("Xatolik: "+e.message,"error");}
   }
 
-  tg.ready();
-  tg.expand();
-
-  fetch("/api/telegram-mini-app?initData=" + encodeURIComponent(tg.initData))
-    .then(r => r.json())
-    .then(result => {
-      if (!result.ok) throw new Error(result.error || "Sessiya tekshirilmadi");
-      if (result.data.linked) {
-        status.textContent = "✅ QarzniUz akkauntingiz Telegram bilan ulangan.";
-      } else {
-        status.textContent = "⚠️ Telegram akkauntingiz hali QarzniUz akkauntiga ulanmagan.";
-        open.hidden = false;
-        open.onclick = () => window.open("https://qarzniuz.uz", "_blank");
-      }
-    })
-    .catch(err => {
-      status.textContent = "Xatolik: " + err.message;
-    });
+  document.getElementById("loginBtn").onclick=async()=>{
+    const btn=document.getElementById("loginBtn");
+    const phone=normalizePhone(document.getElementById("phone").value);
+    const pin=document.getElementById("pin").value.replace(/\D/g,"");
+    if(!/^\+998\d{9}$/.test(phone))return setStatus("Telefon raqamini +998XXXXXXXXX formatida kiriting.","error");
+    if(!/^\d{4}$/.test(pin))return setStatus("PIN-kod aynan 4 ta raqam bo‘lishi kerak.","error");
+    btn.disabled=true;btn.textContent="Kirilmoqda...";
+    try{
+      const password=await sha256(pin);
+      const {data,error}=await supabase.auth.signInWithPassword({phone,password});
+      if(error||!data?.session)throw new Error(error?.message||"Kirish amalga oshmadi");
+      await linkCurrentSession();
+      loginCard.classList.add("hidden");dashboard.classList.remove("hidden");
+      setStatus("✅ Akkaunt muvaffaqiyatli ulandi.","ok");await loadData();
+    }catch(e){setStatus("Xatolik: "+e.message,"error");}
+    finally{btn.disabled=false;btn.textContent="Kirish va Telegram bilan bog‘lash";}
+  };
+  document.getElementById("refreshBtn").onclick=async()=>{
+    try{setStatus("Yangilanmoqda...");await loadData();setStatus("✅ Ma’lumotlar yangilandi.","ok");}
+    catch(e){setStatus("Xatolik: "+e.message,"error");}
+  };
+  document.getElementById("logoutBtn").onclick=async()=>{
+    await supabase.auth.signOut();dashboard.classList.add("hidden");loginCard.classList.remove("hidden");setStatus("Sessiya yopildi. Qayta kirishingiz mumkin.");
+  };
+  document.getElementById("pin").addEventListener("input",e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,4));
+  start();
 })();
 </script>
 </body>
