@@ -56,7 +56,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-ra
 <div id="authSub" class="auth-sub">Telegram orqali QarzniUz akkauntingizga kiring</div>
 <form id="miniAuthForm">
 <div class="form-group auth-extra" id="regNameWrap"><label>Ism</label><input id="authName" placeholder="Masalan: Baxtiyor"></div>
-<div class="form-group auth-extra" id="regShopWrap"><label>Do‘kon nomi</label><input id="authShop" placeholder="Masalan: Mahalla Market"></div>
+<div class="form-group auth-extra" id="regRoleWrap"><label>Profil turi</label><select id="authRole"><option value="OWNER">🏪 Do‘kon egasi</option><option value="SELLER">👤 Sotuvchi</option></select></div><div class="form-group auth-extra" id="regShopWrap"><label>Do‘kon nomi</label><input id="authShop" placeholder="Masalan: Mahalla Market"></div>
 <div class="form-group"><label>Telefon raqami</label><input id="authPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 123 45 67" required></div>
 <div class="form-group"><label>4 xonali PIN-kod</label><input id="authPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="••••" required></div>
 <div class="form-group auth-extra" id="regPin2Wrap"><label>PIN-kodni takrorlang</label><input id="authPin2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="••••"></div>
@@ -141,7 +141,8 @@ function switchTab(name){document.querySelectorAll(".tab-content").forEach(x=>x.
 window.closeDetail=closeDetail;window.openDetail=openDetail;window.payPartial=payPartial;window.payFull=payFull;window.addMore=addMore;window.renderCustomers=renderCustomers;window.sendSMS=sendSMS;window.sendTG=sendTG;window.switchTab=switchTab;
 let miniTgStatus=null,authMode="login",authBusy=false,otpState=null;
 function authMsg(text,error=false){const i=document.getElementById("authInfo"),e=document.getElementById("authError");i.style.display=error?"none":"block";e.style.display=error?"block":"none";(error?e:i).textContent=text||""}
-function setAuthMode(mode){authMode=mode;const reg=mode==="register";document.getElementById("regNameWrap").classList.toggle("show",reg);document.getElementById("regShopWrap").classList.toggle("show",reg);document.getElementById("regPin2Wrap").classList.toggle("show",reg);document.getElementById("authPin").autocomplete=reg?"new-password":"current-password";document.getElementById("authSubmit").textContent=reg?"SMS kodini olish":"Kirish";document.getElementById("authModeBtn").style.display=reg?"none":"block";document.getElementById("authBackBtn").style.display=reg?"block":"none";document.getElementById("authSub").textContent=reg?"Yangi QarzniUz akkauntini yarating":"Telegram orqali QarzniUz akkauntingizga kiring";authMsg("");}
+function setAuthMode(mode){authMode=mode;const reg=mode==="register";document.getElementById("regNameWrap").classList.toggle("show",reg);document.getElementById("regRoleWrap").classList.toggle("show",reg);document.getElementById("regShopWrap").classList.toggle("show",reg);document.getElementById("regPin2Wrap").classList.toggle("show",reg);updateRoleFields();document.getElementById("authPin").autocomplete=reg?"new-password":"current-password";document.getElementById("authSubmit").textContent=reg?"SMS kodini olish":"Kirish";document.getElementById("authModeBtn").style.display=reg?"none":"block";document.getElementById("authBackBtn").style.display=reg?"block":"none";document.getElementById("authSub").textContent=reg?"Yangi QarzniUz akkauntini yarating":"Telegram orqali QarzniUz akkauntingizga kiring";authMsg("");}
+function updateRoleFields(){const role=document.getElementById("authRole")?.value||"OWNER";const shop=document.getElementById("authShop");const wrap=document.getElementById("regShopWrap");const owner=role==="OWNER";if(wrap)wrap.style.display=owner&&authMode==="register"?"block":"none";if(shop)shop.required=owner;}
 function normalizePhone(v){const d=String(v||"").replace(/\D/g,"");if(d.startsWith("998")&&d.length===12)return "+"+d;if(d.length===9)return "+998"+d;if(d.startsWith("8")&&d.length===9)return "+998"+d;return "+"+d}
 async function hashPin(v){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function currentSession(){const {data}=await supabase.auth.getSession();return data?.session||null}
@@ -165,26 +166,26 @@ async function doLogin(){
   try{const h=await hashPin(pin),{data,error}=await supabase.auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await openAppAfterAuth(data.session)}catch(e){authMsg(e.message||"Telefon yoki PIN-kod noto‘g‘ri.",true)}finally{authBusy=false;document.getElementById("authSubmit").disabled=false}
 }
 async function sendRegOtp(){
-  const ph=normalizePhone(document.getElementById("authPhone").value),name=document.getElementById("authName").value.trim(),shop=document.getElementById("authShop").value.trim(),pin=document.getElementById("authPin").value.replace(/\D/g,""),pin2=document.getElementById("authPin2").value.replace(/\D/g,"");
+  const ph=normalizePhone(document.getElementById("authPhone").value),name=document.getElementById("authName").value.trim(),role=document.getElementById("authRole").value,shop=document.getElementById("authShop").value.trim(),pin=document.getElementById("authPin").value.replace(/\D/g,""),pin2=document.getElementById("authPin2").value.replace(/\D/g,"");
   if(!/^\+998\d{9}$/.test(ph))return authMsg("Telefon raqamini +998XXXXXXXXX formatida kiriting.",true);
-  if(!name)return authMsg("Ismingizni kiriting.",true);if(!shop)return authMsg("Do‘kon nomini kiriting.",true);
+  if(!name)return authMsg("Ismingizni kiriting.",true);if(role==="OWNER"&&!shop)return authMsg("Do‘kon nomini kiriting.",true);
   if(!/^\d{4}$/.test(pin)||pin!==pin2)return authMsg("PIN-kodlar 4 xonali va bir xil bo‘lishi kerak.",true);
   authBusy=true;document.getElementById("authSubmit").disabled=true;authMsg("SMS yuborilmoqda...");
   try{try{await supabase.auth.signOut({scope:"local"})}catch(_){}
-    const {error}=await supabase.auth.signInWithOtp({phone:ph,options:{shouldCreateUser:true,data:{full_name:name,shop_name:shop,source:"qarzniuz-telegram-mini-app",qz_registration_intent:"OWNER"}}});if(error)throw error;
-    otpState={phone:ph,name,shop,pin,sentAt:Date.now()};document.getElementById("authOtp").classList.add("show");document.getElementById("authOtpHint").textContent=ph+" raqamiga SMS kod yuborildi.";document.getElementById("authOtpCode").focus();authMsg("SMS yuborildi. Kodni kiriting.");
+    const {error}=await supabase.auth.signInWithOtp({phone:ph,options:{shouldCreateUser:true,data:{full_name:name,shop_name:role==="OWNER"?shop:null,source:"qarzniuz-telegram-mini-app",qz_registration_intent:role}}});if(error)throw error;
+    otpState={phone:ph,name,role,shop:role==="OWNER"?shop:"",pin,sentAt:Date.now()};document.getElementById("authOtp").classList.add("show");document.getElementById("authOtpHint").textContent=ph+" raqamiga SMS kod yuborildi.";document.getElementById("authOtpCode").focus();authMsg("SMS yuborildi. Kodni kiriting.");
   }catch(e){authMsg(e.message||"SMS yuborilmadi.",true)}finally{authBusy=false;document.getElementById("authSubmit").disabled=false}
 }
 async function verifyRegOtp(){
   if(!otpState)return;const code=document.getElementById("authOtpCode").value.replace(/\D/g,"");if(!/^\d{6}$/.test(code))return authMsg("6 xonali SMS kodni kiriting.",true);
   try{authMsg("SMS tasdiqlanmoqda...");const {data,error}=await supabase.auth.verifyOtp({phone:otpState.phone,token:code,type:"sms"});if(error)throw error;if(!data?.session?.access_token)throw Error("SMS tasdiqlandi, lekin sessiya yaratilmadi.");
-    const h=await hashPin(otpState.pin),u=await supabase.auth.updateUser({password:h,data:{...(data.user?.user_metadata||{}),full_name:otpState.name,shop_name:otpState.shop,qz_registration_intent:"OWNER"}});if(u.error)throw u.error;
+    const h=await hashPin(otpState.pin),u=await supabase.auth.updateUser({password:h,data:{...(data.user?.user_metadata||{}),full_name:otpState.name,shop_name:otpState.role==="OWNER"?otpState.shop:null,qz_registration_intent:otpState.role}});if(u.error)throw u.error;
     let session=data.session;const refreshed=await supabase.auth.getSession();if(refreshed.data?.session)session=refreshed.data.session;
     const br=await fetch("/api/shop?action=bootstrap",{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"}),bj=await br.json().catch(()=>({}));if(!br.ok||!bj.ok)throw Error(bj.error||"Do‘kon profili yaratilmadi.");
     await openAppAfterAuth(session);
   }catch(e){authMsg(e.message||"SMS kodi noto‘g‘ri yoki muddati tugagan.",true)}
 }
-async function resendRegOtp(){if(!otpState||authBusy)return;authBusy=true;try{const {error}=await supabase.auth.signInWithOtp({phone:otpState.phone,options:{shouldCreateUser:true,data:{full_name:otpState.name,shop_name:otpState.shop,source:"qarzniuz-telegram-mini-app",qz_registration_intent:"OWNER"}}});if(error)throw error;otpState.sentAt=Date.now();authMsg("Yangi SMS kod yuborildi.");}catch(e){authMsg(e.message||"SMS qayta yuborilmadi.",true)}finally{authBusy=false}}
+async function resendRegOtp(){if(!otpState||authBusy)return;authBusy=true;try{const {error}=await supabase.auth.signInWithOtp({phone:otpState.phone,options:{shouldCreateUser:true,data:{full_name:otpState.name,shop_name:otpState.role==="OWNER"?otpState.shop:null,source:"qarzniuz-telegram-mini-app",qz_registration_intent:otpState.role}}});if(error)throw error;otpState.sentAt=Date.now();authMsg("Yangi SMS kod yuborildi.");}catch(e){authMsg(e.message||"SMS qayta yuborilmadi.",true)}finally{authBusy=false}}
 async function showAuth(){
   document.body.classList.add("auth-needed");setAuthMode("login");
   const session=await currentSession();
@@ -199,7 +200,7 @@ async function start(){
     if(!r.ok||!j.ok)throw Error(j.error||"Telegram sessiyasi tekshirilmadi");
     miniTgStatus=j.data;
     document.getElementById("authModeBtn").onclick=()=>setAuthMode("register");
-    document.getElementById("authBackBtn").onclick=()=>setAuthMode("login");
+    document.getElementById("authBackBtn").onclick=()=>setAuthMode("login");document.getElementById("authRole").onchange=updateRoleFields;
     document.getElementById("miniAuthForm").onsubmit=e=>{e.preventDefault();if(authBusy)return;authMode==="login"?doLogin():sendRegOtp()};
     document.getElementById("authOtpBtn").onclick=verifyRegOtp;document.getElementById("authResendBtn").onclick=resendRegOtp;
     document.getElementById("authOtpCode").addEventListener("input",e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,6));
