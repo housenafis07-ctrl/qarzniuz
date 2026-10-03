@@ -134,11 +134,18 @@ def require_supabase_user(h):
     return user, token
 
 
+def postgrest_eq(value):
+    # Quote filter values so PostgREST parses the operator/value boundary
+    # consistently for numeric IDs as well as UUIDs.
+    safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    return 'eq."' + safe + '"'
+
+
 def get_link(telegram_user_id):
     rows = supabase_request(
         "GET",
         "/rest/v1/telegram_accounts",
-        {"telegram_user_id": "eq." + str(telegram_user_id), "select": "*", "limit": "1"},
+        {"telegram_user_id": postgrest_eq(telegram_user_id), "select": "*", "limit": "1"},
     )
     return rows[0] if rows else None
 
@@ -151,7 +158,7 @@ def link_account(tg_user, qz_user):
     existing_qz = supabase_request(
         "GET",
         "/rest/v1/telegram_accounts",
-        {"user_id": "eq." + qz_user["id"], "select": "*", "limit": "1"},
+        {"user_id": postgrest_eq(qz_user["id"]), "select": "*", "limit": "1"},
     )
     if existing_qz and existing_qz[0].get("telegram_user_id") != tg_user["telegram_user_id"]:
         raise PermissionError("Bu QarzniUz akkauntiga boshqa Telegram akkaunti ulangan")
@@ -173,7 +180,7 @@ def link_account(tg_user, qz_user):
         return supabase_request(
             "PATCH",
             "/rest/v1/telegram_accounts",
-            {"id": "eq." + existing_tg["id"]},
+            {"id": postgrest_eq(existing_tg["id"])},
             {
                 "telegram_username": tg_user["username"] or None,
                 "telegram_first_name": tg_user["first_name"] or None,
@@ -201,7 +208,7 @@ class handler(BaseHTTPRequestHandler):
                 supabase_request(
                     "PATCH",
                     "/rest/v1/telegram_accounts",
-                    {"id": "eq." + link["id"]},
+                    {"id": postgrest_eq(link["id"])},
                     {"last_seen_at": __import__("datetime").datetime.now(
                         __import__("datetime").timezone.utc
                     ).isoformat()},
