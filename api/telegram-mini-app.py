@@ -225,21 +225,43 @@ class handler(BaseHTTPRequestHandler):
             body = read_json(self)
             init_data = str(body.get("initData") or "")
             tg_user = validate_init_data(init_data)
-            qz_user, _ = require_supabase_user(self)
-
             action = str(body.get("action") or "").lower()
-            if action != "link":
-                raise RuntimeError("Noma'lum amal")
 
-            link = link_account(tg_user, qz_user)
-            send_json(self, {
-                "ok": True,
-                "data": {
-                    "linked": True,
-                    "telegram_user_id": tg_user["telegram_user_id"],
-                    "user_id": qz_user["id"],
-                },
-            })
+            if action == "status":
+                link = get_link(tg_user["telegram_user_id"])
+                if link and link.get("status") == "active":
+                    supabase_request(
+                        "PATCH",
+                        "/rest/v1/telegram_accounts",
+                        {"id": "eq." + link["id"]},
+                        {"last_seen_at": __import__("datetime").datetime.now(
+                            __import__("datetime").timezone.utc
+                        ).isoformat()},
+                    )
+                send_json(self, {
+                    "ok": True,
+                    "data": {
+                        "telegram": tg_user,
+                        "linked": bool(link and link.get("status") == "active"),
+                        "user_id": link.get("user_id") if link else None,
+                    },
+                })
+                return
+
+            if action == "link":
+                qz_user, _ = require_supabase_user(self)
+                link = link_account(tg_user, qz_user)
+                send_json(self, {
+                    "ok": True,
+                    "data": {
+                        "linked": True,
+                        "telegram_user_id": tg_user["telegram_user_id"],
+                        "user_id": qz_user["id"],
+                    },
+                })
+                return
+
+            raise RuntimeError("Noma'lum amal")
         except PermissionError as e:
             send_json(self, {"ok": False, "error": str(e)}, 401)
         except Exception as e:
