@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>QarzniUz — Telegram</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,system-ui,-apple-system,sans-serif; background:#f5f7f9; color:#17202a; }
+    main { max-width:560px; margin:0 auto; padding:24px 16px 40px; }
+    .card { background:#fff; border-radius:20px; padding:22px; box-shadow:0 8px 30px rgba(0,0,0,.06); }
+    h1 { margin:0 0 8px; font-size:26px; }
+    p { color:#667085; line-height:1.5; }
+    button { width:100%; border:0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700; background:#1789e6; color:#fff; }
+    .status { margin:16px 0; padding:12px; border-radius:12px; background:#f2f4f7; font-size:14px; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <h1>QarzniUz</h1>
+    <p>Telegram Mini App</p>
+    <div id="status" class="status">Telegram sessiyasi tekshirilmoqda...</div>
+    <button id="open" hidden>QarzniUz saytini ochish</button>
+  </section>
+</main>
+<script>
+(() => {
+  const tg = window.Telegram?.WebApp;
+  const status = document.getElementById("status");
+  const open = document.getElementById("open");
+
+  if (!tg || !tg.initData) {
+    status.textContent = "Mini App Telegram ichidan ochilishi kerak.";
+    return;
+  }
+
+  tg.ready();
+  tg.expand();
+
+  fetch("/api/telegram-mini-app?initData=" + encodeURIComponent(tg.initData))
+    .then(r => r.json())
+    .then(result => {
+      if (!result.ok) throw new Error(result.error || "Sessiya tekshirilmadi");
+      if (result.data.linked) {
+        status.textContent = "✅ QarzniUz akkauntingiz Telegram bilan ulangan.";
+      } else {
+        status.textContent = "⚠️ Telegram akkauntingiz hali QarzniUz akkauntiga ulanmagan.";
+        open.hidden = false;
+        open.onclick = () => window.open("https://qarzniuz.uz", "_blank");
+      }
+    })
+    .catch(err => {
+      status.textContent = "Xatolik: " + err.message;
+    });
+})();
+</script>
+</body>
+</html>
