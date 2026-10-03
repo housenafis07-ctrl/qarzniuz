@@ -85,7 +85,7 @@ def validate_init_data(init_data):
     }
 
 
-def supabase_request(method, path, query=None, body=None, bearer=None):
+def supabase_request(method, path, query=None, body=None, bearer=None, prefer=None):
     key = SUPABASE_SERVICE_KEY or SUPABASE_ANON_KEY
     auth = bearer or SUPABASE_SERVICE_KEY
     if not SUPABASE_URL or not key or not auth:
@@ -93,8 +93,6 @@ def supabase_request(method, path, query=None, body=None, bearer=None):
 
     url = SUPABASE_URL + path
     if query:
-        # Query values may already contain percent-encoded PostgREST syntax.
-        # Encode keys normally but preserve the filter value verbatim.
         parts = []
         for qkey, qvalue in query.items():
             parts.append(
@@ -108,7 +106,7 @@ def supabase_request(method, path, query=None, body=None, bearer=None):
     req.add_header("Authorization", "Bearer " + auth)
     req.add_header("Content-Type", "application/json")
     req.add_header("Accept", "application/json")
-    req.add_header("Prefer", "return=representation")
+    req.add_header("Prefer", prefer or "return=representation")
 
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
@@ -141,20 +139,41 @@ def require_supabase_user(h):
     return user, token
 
 
-def postgrest_eq(value):
-    # PostgREST filter syntax is operator.value. Build it explicitly and
-    # percent-encode the dot so proxies cannot strip the operator.
-    safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return "eq%2E" + urllib.parse.quote(safe, safe="")
+def get_all_telegram_links():
+    # Avoid PostgREST eq filters for this small link table. The previous
+    # implementation reached PostgREST with the operator stripped and caused
+    # PGRST100. The main debt/customer tables are not queried here.
+    return supabase_request(
+        "GET",
+        "/rest/v1/telegram_accounts",
+        {"select": "*"},
+    )
 
 
 def get_link(telegram_user_id):
-    rows = supabase_request(
-        "GET",
+    target = int(telegram_user_id)
+    for row in get_all_telegram_links():
+        if int(row.get("telegram_user_id") or 0) == target:
+            return row
+    return None
+
+
+def get_link_by_qz_user(user_id):
+    target = str(user_id)
+    for row in get_all_telegram_links():
+        if str(row.get("user_id") or "") == target:
+            return row
+    return None
+
+
+def upsert_link(payload):
+    return supabase_request(
+        "POST",
         "/rest/v1/telegram_accounts",
-        {"telegram_user_id": postgrest_eq(telegram_user_id), "select": "*", "limit": "1"},
-    )
-    return rows[0] if rows else None
+        {"on_conflict": "telegram_user_id"},
+        payload,
+        prefer="resolution=merge-duplicates,return=representation",
+    )[0]
 
 
 def link_account(tg_user, qz_user):
@@ -162,12 +181,8 @@ def link_account(tg_user, qz_user):
     if existing_tg and existing_tg.get("user_id") != qz_user["id"]:
         raise PermissionError("Bu Telegram akkaunti boshqa QarzniUz akkauntiga ulangan")
 
-    existing_qz = supabase_request(
-        "GET",
-        "/rest/v1/telegram_accounts",
-        {"user_id": postgrest_eq(qz_user["id"]), "select": "*", "limit": "1"},
-    )
-    if existing_qz and existing_qz[0].get("telegram_user_id") != tg_user["telegram_user_id"]:
+    existing_qz = get_link_by_qz_user(qz_user["id"])
+    if existing_qz and int(existing_qz.get("telegram_user_id") or 0) != tg_user["telegram_user_id"]:
         raise PermissionError("Bu QarzniUz akkauntiga boshqa Telegram akkaunti ulangan")
 
     payload = {
@@ -177,27 +192,15 @@ def link_account(tg_user, qz_user):
         "telegram_first_name": tg_user["first_name"] or None,
         "telegram_last_name": tg_user["last_name"] or None,
         "status": "active",
-        "last_seen_at": "now()",
+        "last_seen_at": __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ).isoformat(),
     }
 
     if existing_tg:
-        # Avoid sending the PostgreSQL expression as a JSON value.
-        payload.pop("user_id", None)
-        payload["last_seen_at"] = None
-        return supabase_request(
-            "PATCH",
-            "/rest/v1/telegram_accounts",
-            {"id": postgrest_eq(existing_tg["id"])},
-            {
-                "telegram_username": tg_user["username"] or None,
-                "telegram_first_name": tg_user["first_name"] or None,
-                "telegram_last_name": tg_user["last_name"] or None,
-                "status": "active",
-            },
-        )[0]
+        payload["id"] = existing_tg["id"]
 
-    payload.pop("last_seen_at", None)
-    return supabase_request("POST", "/rest/v1/telegram_accounts", payload)[0]
+    return upsert_link(payload)
 
 
 class handler(BaseHTTPRequestHandler):
@@ -209,17 +212,6 @@ class handler(BaseHTTPRequestHandler):
             init_data = params.get("initData", [""])[0]
             tg_user = validate_init_data(init_data)
             link = get_link(tg_user["telegram_user_id"])
-
-            if link and link.get("status") == "active":
-                # Update last_seen without requiring a browser-visible write policy.
-                supabase_request(
-                    "PATCH",
-                    "/rest/v1/telegram_accounts",
-                    {"id": postgrest_eq(link["id"])},
-                    {"last_seen_at": __import__("datetime").datetime.now(
-                        __import__("datetime").timezone.utc
-                    ).isoformat()},
-                )
 
             send_json(self, {
                 "ok": True,
@@ -243,15 +235,6 @@ class handler(BaseHTTPRequestHandler):
 
             if action == "status":
                 link = get_link(tg_user["telegram_user_id"])
-                if link and link.get("status") == "active":
-                    supabase_request(
-                        "PATCH",
-                        "/rest/v1/telegram_accounts",
-                        {"id": "eq." + link["id"]},
-                        {"last_seen_at": __import__("datetime").datetime.now(
-                            __import__("datetime").timezone.utc
-                        ).isoformat()},
-                    )
                 send_json(self, {
                     "ok": True,
                     "data": {
