@@ -93,7 +93,14 @@ def supabase_request(method, path, query=None, body=None, bearer=None):
 
     url = SUPABASE_URL + path
     if query:
-        url += "?" + urllib.parse.urlencode(query, doseq=True)
+        # Query values may already contain percent-encoded PostgREST syntax.
+        # Encode keys normally but preserve the filter value verbatim.
+        parts = []
+        for qkey, qvalue in query.items():
+            parts.append(
+                urllib.parse.quote(str(qkey), safe="") + "=" + str(qvalue)
+            )
+        url += "?" + "&".join(parts)
 
     raw = json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=raw, method=method)
@@ -135,10 +142,10 @@ def require_supabase_user(h):
 
 
 def postgrest_eq(value):
-    # PostgREST expects eq.<value>. Do not quote numeric bigint IDs:
-    # eq."38234907" makes PostgreSQL receive the literal quotes.
+    # PostgREST filter syntax is operator.value. Build it explicitly and
+    # percent-encode the dot so proxies cannot strip the operator.
     safe = str(value).replace("\\", "\\\\").replace('"', '\\"')
-    return "eq." + safe
+    return "eq%2E" + urllib.parse.quote(safe, safe="")
 
 
 def get_link(telegram_user_id):
