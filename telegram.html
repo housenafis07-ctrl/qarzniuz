@@ -147,7 +147,10 @@ function normalizePhone(v){const d=String(v||"").replace(/\D/g,"");if(d.startsWi
 async function hashPin(v){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,"0")).join("")}
 async function currentSession(){const {data}=await supabase.auth.getSession();return data?.session||null}
 async function openAppAfterAuth(session){
-  if(!session?.access_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
+  if(!session?.access_token||!session?.refresh_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
+  const synced=await supabase.auth.setSession({access_token:session.access_token,refresh_token:session.refresh_token});
+  if(synced.error)throw synced.error;
+  session=synced.data?.session||session;
   const r=await fetch("/api/telegram-mini-app",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify({action:"status",initData:tg.initData}),cache:"no-store"});
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw Error(j.error||"Telegram akkauntini tekshirishda xatolik");
