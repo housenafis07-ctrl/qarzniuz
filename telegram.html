@@ -116,26 +116,66 @@ const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth
 let customers=[],currentMember=null,currentShop=null,qzSession=null;
 const statusEl=document.getElementById("status"),money=n=>new Intl.NumberFormat("uz-UZ").format(Number(n||0))+" so‘m",esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])),today=()=>new Date().toISOString().slice(0,10);
 function status(t,c=""){statusEl.textContent=t;statusEl.className="status "+c}
+async function refreshQzSession(session){
+  if(!session?.refresh_token||!tg?.initData)return null;
+  const r=await withTimeout(fetch("/api/telegram-mini-app",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({action:"refresh",initData:tg.initData,refresh_token:session.refresh_token}),
+    cache:"no-store"
+  }),15000,"QarzniUz sessiyasini yangilash serveri javob bermadi.");
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok||!j.data?.session?.access_token)throw Error(j.error||"QarzniUz sessiyasi eskirgan. Qayta kiring.");
+  qzSession=j.data.session;
+  try{sessionStorage.setItem("qz_telegram_session",JSON.stringify(qzSession))}catch(_){};
+  return qzSession;
+}
+async function ensureSession(){
+  let session=await currentSession();
+  if(!session?.access_token)return null;
+  const exp=Number(session.expires_at||0);
+  if(exp>0&&exp>Date.now()/1000+60)return session;
+  if(session.refresh_token){
+    try{return await refreshQzSession(session)}catch(_){return null}
+  }
+  return session;
+}
 async function getApi(action){
-  const session=qzSession||await currentSession();
-  if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");
-  const r=await withTimeout(fetch("/api/shop?action="+encodeURIComponent(action),{
+  let session=await ensureSession();
+  if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi. Telefon va PIN orqali qayta kiring.");
+  let r=await withTimeout(fetch("/api/shop?action="+encodeURIComponent(action),{
     headers:{Authorization:"Bearer "+session.access_token},
     cache:"no-store"
   }),15000,"Do‘kon serveri 15 soniyada javob bermadi.");
+  if(r.status===401&&session.refresh_token){
+    session=await refreshQzSession(session);
+    r=await withTimeout(fetch("/api/shop?action="+encodeURIComponent(action),{
+      headers:{Authorization:"Bearer "+session.access_token},
+      cache:"no-store"
+    }),15000,"Do‘kon serveri 15 soniyada javob bermadi.");
+  }
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));
   return j.data
 }
 async function sellerApi(body){
-  const session=qzSession||await currentSession();
-  if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");
-  const r=await withTimeout(fetch("/api/shop",{
+  let session=await ensureSession();
+  if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi. Telefon va PIN orqali qayta kiring.");
+  let r=await withTimeout(fetch("/api/shop",{
     method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},
     body:JSON.stringify(body),
     cache:"no-store"
   }),15000,"Do‘kon serveri 15 soniyada javob bermadi.");
+  if(r.status===401&&session.refresh_token){
+    session=await refreshQzSession(session);
+    r=await withTimeout(fetch("/api/shop",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},
+      body:JSON.stringify(body),
+      cache:"no-store"
+    }),15000,"Do‘kon serveri 15 soniyada javob bermadi.");
+  }
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));
   return j.data
@@ -199,10 +239,16 @@ async function doLogin(){
   authBusy=true;document.getElementById("authSubmit").disabled=true;document.getElementById("authSubmit").textContent="Kirilmoqda...";authMsg("Kirish tekshirilmoqda...");
   try{
     const h=await hashPin(pin);
-    const r=await withTimeout(fetch(SUPABASE_URL+"/auth/v1/token?grant_type=password",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY},body:JSON.stringify({phone:ph,password:h}),cache:"no-store"}),15000,"Kirish serveri javob bermadi. 15 soniyadan keyin qayta urinib ko‘ring.");
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok||!data?.access_token)throw Error(data.error_description||data.msg||"Telefon yoki PIN-kod noto‘g‘ri.");
-    const session={access_token:data.access_token,refresh_token:data.refresh_token,expires_in:data.expires_in,expires_at:data.expires_at,user:data.user};
+    const r=await withTimeout(fetch("/api/telegram-mini-app",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({action:"login",initData:tg.initData,phone:ph,password:h}),
+      cache:"no-store"
+    }),15000,"Kirish serveri javob bermadi. 15 soniyadan keyin qayta urinib ko‘ring.");
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok||!j.data?.session?.access_token)throw Error(j.error||"Telefon yoki PIN-kod noto‘g‘ri.");
+    const data=j.data.session;
+    const session={...data,expires_at:data.expires_at||(data.expires_in?Math.floor(Date.now()/1000)+Number(data.expires_in):0)};
     authMsg("Akkaunt topildi. Do‘kon ma’lumotlari tekshirilmoqda...");
     await withTimeout(openAppAfterAuth(session),20000,"Do‘kon ma’lumotlarini yuklash vaqti tugadi.");
   }catch(e){authMsg(e.message||"Telefon yoki PIN-kod noto‘g‘ri.",true)}
@@ -231,8 +277,18 @@ async function verifyRegOtp(){
 async function resendRegOtp(){if(!otpState||authBusy)return;authBusy=true;try{const {error}=await supabase.auth.signInWithOtp({phone:otpState.phone,options:{shouldCreateUser:true,data:{full_name:otpState.name,shop_name:otpState.role==="OWNER"?otpState.shop:null,source:"qarzniuz-telegram-mini-app",qz_registration_intent:otpState.role}}});if(error)throw error;otpState.sentAt=Date.now();authMsg("Yangi SMS kod yuborildi.");}catch(e){authMsg(e.message||"SMS qayta yuborilmadi.",true)}finally{authBusy=false}}
 async function showAuth(){
   document.body.classList.add("auth-needed");setAuthMode("login");
-  const session=await currentSession();
-  if(session){try{await openAppAfterAuth(session);return}catch(e){try{await supabase.auth.signOut({scope:"local"})}catch(_){}}}
+  let session=await currentSession();
+  if(session){
+    try{
+      session=await ensureSession()||session;
+      await openAppAfterAuth(session);
+      return;
+    }catch(e){
+      qzSession=null;
+      try{sessionStorage.removeItem("qz_telegram_session")}catch(_){}
+      try{await supabase.auth.signOut({scope:"local"})}catch(_){}
+    }
+  }
   authMsg(miniTgStatus?.linked?"Telegram akkauntingiz ulangan. Telefon va PIN orqali kiring.":"Telegram akkauntingiz hali ulanmagan. Mavjud akkaunt bilan kiring yoki yangi akkaunt yarating.");
 }
 async function start(){
