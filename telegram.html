@@ -60,7 +60,7 @@ input,textarea,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-ra
 <div class="form-group"><label>Telefon raqami</label><input id="authPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 123 45 67" required></div>
 <div class="form-group"><label>4 xonali PIN-kod</label><input id="authPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="4" placeholder="••••" required></div>
 <div class="form-group auth-extra" id="regPin2Wrap"><label>PIN-kodni takrorlang</label><input id="authPin2" type="password" inputmode="numeric" autocomplete="new-password" maxlength="4" placeholder="••••"></div>
-<button class="btn" id="authSubmit" type="submit">Kirish</button>
+<button class="btn" id="authSubmit" type="button">Kirish</button>
 </form>
 <button class="auth-switch" id="authModeBtn" type="button">Yangi akkaunt ochish</button>
 <button class="auth-back" id="authBackBtn" type="button" style="display:none">← Kirishga qaytish</button>
@@ -236,7 +236,7 @@ async function doLogin(){
   const ph=normalizePhone(document.getElementById("authPhone").value),pin=document.getElementById("authPin").value.replace(/\D/g,"");
   if(!/^\+998\d{9}$/.test(ph))return authMsg("Telefon raqamini +998XXXXXXXXX formatida kiriting.",true);
   if(!/^\d{4}$/.test(pin))return authMsg("PIN-kod aynan 4 ta raqam bo‘lishi kerak.",true);
-  authBusy=true;document.getElementById("authSubmit").disabled=true;document.getElementById("authSubmit").textContent="Kirilmoqda...";authMsg("Kirish tekshirilmoqda...");
+  authBusy=true;document.getElementById("authSubmit").disabled=true;document.getElementById("authSubmit").textContent="Kirilmoqda...";authMsg("Kirish tugmasi bosildi. 1/3 · Telefon va PIN tekshirilmoqda...");
   try{
     const h=await hashPin(pin);
     authMsg("1/3 · Telefon va PIN tekshirilmoqda...");
@@ -305,7 +305,8 @@ async function start(){
     status("Telegram sessiyasi tasdiqlandi. Mini App tayyor.","ok");
     document.getElementById("authModeBtn").onclick=()=>setAuthMode("register");
     document.getElementById("authBackBtn").onclick=()=>setAuthMode("login");document.getElementById("authRole").onchange=updateRoleFields;
-    document.getElementById("miniAuthForm").onsubmit=e=>{e.preventDefault();if(authBusy)return;authMode==="login"?doLogin():sendRegOtp()};
+    const authSubmit=document.getElementById("authSubmit"),authAction=e=>{e?.preventDefault?.();if(authBusy)return;authMode==="login"?doLogin():sendRegOtp()};authSubmit.onclick=authAction;
+    document.getElementById("miniAuthForm").onsubmit=authAction;
     document.getElementById("authOtpBtn").onclick=verifyRegOtp;document.getElementById("authResendBtn").onclick=resendRegOtp;
     document.getElementById("authOtpCode").addEventListener("input",e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,6));
     document.getElementById("authPin").addEventListener("input",e=>e.target.value=e.target.value.replace(/\D/g,"").slice(0,4));
