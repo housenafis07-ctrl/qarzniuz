@@ -158,12 +158,33 @@ async function openAppAfterAuth(session){
   }
   await loadData();document.body.classList.remove("auth-needed");document.getElementById("custDateGiven").value=today();status("✅ Akkaunt muvaffaqiyatli ulandi.","ok");
 }
+async function withTimeout(promise,ms,label){
+  let timer;
+  try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),ms)])}
+  finally{clearTimeout(timer)}
+}
 async function doLogin(){
   const ph=normalizePhone(document.getElementById("authPhone").value),pin=document.getElementById("authPin").value.replace(/\D/g,"");
   if(!/^\+998\d{9}$/.test(ph))return authMsg("Telefon raqamini +998XXXXXXXXX formatida kiriting.",true);
   if(!/^\d{4}$/.test(pin))return authMsg("PIN-kod aynan 4 ta raqam bo‘lishi kerak.",true);
-  authBusy=true;document.getElementById("authSubmit").disabled=true;authMsg("Kirilmoqda...");
-  try{const h=await hashPin(pin),{data,error}=await supabase.auth.signInWithPassword({phone:ph,password:h});if(error)throw error;await openAppAfterAuth(data.session)}catch(e){authMsg(e.message||"Telefon yoki PIN-kod noto‘g‘ri.",true)}finally{authBusy=false;document.getElementById("authSubmit").disabled=false}
+  authBusy=true;document.getElementById("authSubmit").disabled=true;document.getElementById("authSubmit").textContent="Kirilmoqda...";authMsg("Kirish tekshirilmoqda...");
+  try{
+    const h=await hashPin(pin);
+    const {data,error}=await withTimeout(
+      supabase.auth.signInWithPassword({phone:ph,password:h}),
+      15000,
+      "Kirish serveri javob bermadi. 15 soniyadan keyin qayta urinib ko‘ring."
+    );
+    if(error)throw error;
+    if(!data?.session?.access_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
+    authMsg("Akkaunt topildi. Do‘kon ma’lumotlari tekshirilmoqda...");
+    await withTimeout(
+      openAppAfterAuth(data.session),
+      20000,
+      "Do‘kon ma’lumotlarini yuklash vaqti tugadi."
+    );
+  }catch(e){authMsg(e.message||"Telefon yoki PIN-kod noto‘g‘ri.",true)}
+  finally{authBusy=false;document.getElementById("authSubmit").disabled=false;document.getElementById("authSubmit").textContent="Kirish"}
 }
 async function sendRegOtp(){
   const ph=normalizePhone(document.getElementById("authPhone").value),name=document.getElementById("authName").value.trim(),role=document.getElementById("authRole").value,shop=document.getElementById("authShop").value.trim(),pin=document.getElementById("authPin").value.replace(/\D/g,""),pin2=document.getElementById("authPin2").value.replace(/\D/g,"");
