@@ -214,11 +214,14 @@ def upsert_link(payload):
 
 def link_account(tg_user, qz_user):
     existing_tg = get_link(tg_user["telegram_user_id"])
-    if existing_tg and existing_tg.get("user_id") != qz_user["id"]:
-        raise PermissionError("Bu Telegram akkaunti boshqa QarzniUz akkauntiga ulangan")
-
     existing_qz = get_link_by_qz_user(qz_user["id"])
-    if existing_qz and int(existing_qz.get("telegram_user_id") or 0) != tg_user["telegram_user_id"]:
+
+    # The phone + PIN login is the explicit authorization for which QZ
+    # account this Telegram Mini App should use. If the Telegram account was
+    # linked to another QZ account during testing, move that link to the
+    # freshly authenticated account. Do not allow the reverse collision:
+    # one QZ account cannot silently be attached to another Telegram account.
+    if existing_qz and int(existing_qz.get("telegram_user_id") or 0) != int(tg_user["telegram_user_id"]):
         raise PermissionError("Bu QarzniUz akkauntiga boshqa Telegram akkaunti ulangan")
 
     payload = {
