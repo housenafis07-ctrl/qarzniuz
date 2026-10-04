@@ -113,11 +113,11 @@ input,textarea,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-ra
 (()=> {
 const SUPABASE_URL="https://yzicsoyufdghwiezqjsa.supabase.co",SUPABASE_ANON_KEY="sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM";
 const supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}}),tg=window.Telegram?.WebApp;
-let customers=[],currentMember=null,currentShop=null;
+let customers=[],currentMember=null,currentShop=null,qzSession=null;
 const statusEl=document.getElementById("status"),money=n=>new Intl.NumberFormat("uz-UZ").format(Number(n||0))+" so‘m",esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])),today=()=>new Date().toISOString().slice(0,10);
 function status(t,c=""){statusEl.textContent=t;statusEl.className="status "+c}
-async function getApi(action){const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");const r=await fetch("/api/shop?action="+encodeURIComponent(action),{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"}),j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));return j.data}
-async function sellerApi(body){const {data:{session}}=await supabase.auth.getSession();if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");const r=await fetch("/api/shop",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body),cache:"no-store"}),j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));return j.data}
+async function getApi(action){const session=qzSession||await currentSession();if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");const r=await fetch("/api/shop?action="+encodeURIComponent(action),{headers:{Authorization:"Bearer "+session.access_token},cache:"no-store"}),j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));return j.data}
+async function sellerApi(body){const session=qzSession||await currentSession();if(!session?.access_token)throw Error("QarzniUz sessiyasi topilmadi.");const r=await fetch("/api/shop",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify(body),cache:"no-store"}),j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error(j.error||("Server xatosi ("+r.status+")"));return j.data}
 function mapData(p){const cs=p.customers||[],ds=p.debts||[],ps=p.payments||[];return cs.map(c=>{const debts=ds.filter(d=>d.customer_id===c.id),pays=ps.filter(x=>x.customer_id===c.id&&x.status==="recorded"),history=[...debts.map(d=>({date:String(d.created_at||"").slice(0,10),type:"Dastlabki qarz",amount:Number(d.amount||0),note:d.note||"Dastlabki mahsulotlar"})),...pays.map(x=>({date:String(x.created_at||"").slice(0,10),type:"Qisman To‘lov",amount:Number(x.amount||0),note:x.note||"To‘lov"}))].sort((a,b)=>String(a.date).localeCompare(String(b.date))),lastDebt=debts.slice().sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)))[0];return{id:c.id,name:c.full_name||"—",phone:c.phone||"",amount:Number(c.balance||0),archived:Number(c.balance||0)<=.009,dateGiven:debts[0]?String(debts[0].created_at).slice(0,10):String(c.created_at||"").slice(0,10),dateDue:lastDebt?.due_date||"",note:lastDebt?.note||c.note||"",history}})}
 async function loadData(){const [b,d]=await Promise.all([getApi("bootstrap"),getApi("data")]);currentMember=b.member||null;currentShop=b.shop||null;customers=mapData(d);document.getElementById("shopTitle").textContent=currentShop?.name||"QarzniUz";document.getElementById("shopBtn").classList.toggle("hidden",String(currentMember?.role||"").toUpperCase()!=="OWNER");renderCustomers();renderProfile();renderPremium()}
 function renderCustomers(){const q=document.getElementById("search").value.trim().toLowerCase(),mode=document.getElementById("sort").value;let list=customers.filter(c=>(c.name+" "+c.phone).toLowerCase().includes(q));if(mode==="paid")list=list.filter(c=>c.archived);else{list=list.filter(c=>!c.archived);if(mode==="overdue")list=list.filter(c=>c.dateDue&&c.dateDue<today());if(mode==="amount")list.sort((a,b)=>b.amount-a.amount)}const total=customers.filter(c=>!c.archived).reduce((s,c)=>s+c.amount,0);document.getElementById("totalDebt").textContent=money(total);const box=document.getElementById("customerList");if(!list.length){box.innerHTML='<div class="card empty">Hozircha bu bo‘limda ma’lumot yo‘q.</div>';return}box.innerHTML=list.map(c=>{const overdue=!c.archived&&c.dateDue&&c.dateDue<today(),id=encodeURIComponent(c.id);let action=c.archived?'<button class="action more" onclick="addMore(\''+id+'\')">➕ Qarz qo‘shish</button>':'<button class="action sms" onclick="sendSMS(\''+esc(c.phone)+'\',\''+esc(c.name)+'\','+c.amount+',\''+esc(c.dateDue)+'\')">💬 SMS</button><button class="action tg" onclick="sendTG(\''+esc(c.phone)+'\',\''+esc(c.name)+'\','+c.amount+',\''+esc(c.dateDue)+'\')">✈️ Telegram</button><button class="action partial" onclick="payPartial(\''+id+'\')">💰 Qisman to‘lov</button><button class="action more" onclick="addMore(\''+id+'\')">➕ Qarz qo‘shish</button><button class="action pay" style="flex:1 1 100%" onclick="payFull(\''+id+'\')">✅ To‘liq yopish</button>';return '<div class="customer-card '+(overdue?'overdue ':'')+(c.archived?'paid':'')+'"><div class="card-header" onclick="openDetail(\''+id+'\')"><span class="card-title">👤 '+esc(c.name)+'</span><span class="amount '+(c.archived?'paid-amount':'')+'">'+(c.archived?'✅ To‘langan':money(c.amount))+'</span></div><div class="details" onclick="openDetail(\''+id+'\')">📞 <b>Telefon:</b> '+esc(c.phone||"—")+'<br>📅 <b>Qarz olingan:</b> '+esc(c.dateGiven||"—")+' | ⏳ <b>Muddat:</b> '+esc(c.dateDue||"—")+(overdue?' <b style="color:#ef4444">(Muddati o‘tgan)</b>':'')+'<br>📝 <b>Izoh:</b> '+esc(c.note||"—")+'<br><small style="color:#2563eb;font-weight:700">👆 Batafsil tarixni ko‘rish</small></div><div class="actions">'+action+'</div></div>'}).join("")}
@@ -135,7 +135,7 @@ function sendSMS(phone,name,amount,due){location.href="sms:"+phone+"?body="+enco
 function sendTG(phone,name,amount,due){const msg=(currentShop?.name||"Do‘konimiz")+": Hurmatli "+name+", qarzingiz: "+money(amount)+". Muddati: "+due+".";navigator.clipboard?.writeText(msg);window.open("https://t.me/share/url?url=&text="+encodeURIComponent(msg),"_blank")}
 document.getElementById("copyCard").onclick=async()=>{await navigator.clipboard?.writeText("5614681918298047");status("📋 Karta raqami nusxalandi.","ok")}
 document.getElementById("sendReceipt").onclick=()=>{const text="QarzniUz Premium to‘lovi\nDo‘kon: "+(currentShop?.name||"—")+"\nSumma: 25 000 so‘m";navigator.clipboard?.writeText(text);window.open("https://t.me/qarzni_uzbot?start=pay_"+Date.now(),"_blank")}
-document.getElementById("activate").onclick=activatePremium;document.getElementById("refreshBtn").onclick=async()=>{try{status("Yangilanmoqda...");await loadData();status("✅ Ma’lumotlar yangilandi.","ok")}catch(e){status("Xatolik: "+e.message,"error")}};document.getElementById("shopBtn").onclick=()=>location.href="/shop.html";document.getElementById("logoutBtn").onclick=async()=>{await supabase.auth.signOut({scope:"local"});location.reload()};
+document.getElementById("activate").onclick=activatePremium;document.getElementById("refreshBtn").onclick=async()=>{try{status("Yangilanmoqda...");await loadData();status("✅ Ma’lumotlar yangilandi.","ok")}catch(e){status("Xatolik: "+e.message,"error")}};document.getElementById("shopBtn").onclick=()=>location.href="/shop.html";document.getElementById("logoutBtn").onclick=async()=>{qzSession=null;try{sessionStorage.removeItem("qz_telegram_session")}catch(_){}try{await supabase.auth.signOut({scope:"local"})}catch(_){}location.reload()};
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 function switchTab(name){document.querySelectorAll(".tab-content").forEach(x=>x.classList.remove("active"));document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));document.getElementById("tab-"+name).classList.add("active");document.querySelector('.tab[data-tab="'+name+'"]').classList.add("active");if(name==="profile")renderProfile();if(name==="pro")renderPremium();if(name==="list")renderCustomers();window.scrollTo(0,0)}
 window.closeDetail=closeDetail;window.openDetail=openDetail;window.payPartial=payPartial;window.payFull=payFull;window.addMore=addMore;window.renderCustomers=renderCustomers;window.sendSMS=sendSMS;window.sendTG=sendTG;window.switchTab=switchTab;
@@ -145,12 +145,11 @@ function setAuthMode(mode){authMode=mode;const reg=mode==="register";document.ge
 function updateRoleFields(){const role=document.getElementById("authRole")?.value||"OWNER";const shop=document.getElementById("authShop");const wrap=document.getElementById("regShopWrap");const owner=role==="OWNER";if(wrap)wrap.style.display=owner&&authMode==="register"?"block":"none";if(shop)shop.required=owner;}
 function normalizePhone(v){const d=String(v||"").replace(/\D/g,"");if(d.startsWith("998")&&d.length===12)return "+"+d;if(d.length===9)return "+998"+d;if(d.startsWith("8")&&d.length===9)return "+998"+d;return "+"+d}
 async function hashPin(v){const d=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,"0")).join("")}
-async function currentSession(){const {data}=await supabase.auth.getSession();return data?.session||null}
+async function currentSession(){if(qzSession?.access_token)return qzSession;try{const raw=sessionStorage.getItem("qz_telegram_session");if(raw){const s=JSON.parse(raw);if(s?.access_token){qzSession=s;return s}}}catch(_){}return null}
 async function openAppAfterAuth(session){
-  if(!session?.access_token||!session?.refresh_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
-  const synced=await supabase.auth.setSession({access_token:session.access_token,refresh_token:session.refresh_token});
-  if(synced.error)throw synced.error;
-  session=synced.data?.session||session;
+  if(!session?.access_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
+  qzSession=session;
+  try{sessionStorage.setItem("qz_telegram_session",JSON.stringify(session))}catch(_){};
   const r=await fetch("/api/telegram-mini-app",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify({action:"status",initData:tg.initData}),cache:"no-store"});
   const j=await r.json().catch(()=>({}));
   if(!r.ok||!j.ok)throw Error(j.error||"Telegram akkauntini tekshirishda xatolik");
@@ -173,19 +172,12 @@ async function doLogin(){
   authBusy=true;document.getElementById("authSubmit").disabled=true;document.getElementById("authSubmit").textContent="Kirilmoqda...";authMsg("Kirish tekshirilmoqda...");
   try{
     const h=await hashPin(pin);
-    const {data,error}=await withTimeout(
-      supabase.auth.signInWithPassword({phone:ph,password:h}),
-      15000,
-      "Kirish serveri javob bermadi. 15 soniyadan keyin qayta urinib ko‘ring."
-    );
-    if(error)throw error;
-    if(!data?.session?.access_token)throw Error("QarzniUz sessiyasi yaratilmadi.");
+    const r=await withTimeout(fetch(SUPABASE_URL+"/auth/v1/token?grant_type=password",{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+SUPABASE_ANON_KEY},body:JSON.stringify({phone:ph,password:h}),cache:"no-store"}),15000,"Kirish serveri javob bermadi. 15 soniyadan keyin qayta urinib ko‘ring.");
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok||!data?.access_token)throw Error(data.error_description||data.msg||"Telefon yoki PIN-kod noto‘g‘ri.");
+    const session={access_token:data.access_token,refresh_token:data.refresh_token,expires_in:data.expires_in,expires_at:data.expires_at,user:data.user};
     authMsg("Akkaunt topildi. Do‘kon ma’lumotlari tekshirilmoqda...");
-    await withTimeout(
-      openAppAfterAuth(data.session),
-      20000,
-      "Do‘kon ma’lumotlarini yuklash vaqti tugadi."
-    );
+    await withTimeout(openAppAfterAuth(session),20000,"Do‘kon ma’lumotlarini yuklash vaqti tugadi.");
   }catch(e){authMsg(e.message||"Telefon yoki PIN-kod noto‘g‘ri.",true)}
   finally{authBusy=false;document.getElementById("authSubmit").disabled=false;document.getElementById("authSubmit").textContent="Kirish"}
 }
@@ -223,6 +215,7 @@ async function start(){
     const r=await fetch("/api/telegram-mini-app",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"status",initData:tg.initData}),cache:"no-store"}),j=await r.json();
     if(!r.ok||!j.ok)throw Error(j.error||"Telegram sessiyasi tekshirilmadi");
     miniTgStatus=j.data;
+    status(miniTgStatus?.linked?"Telegram sessiyasi tasdiqlandi.":"Telegram sessiyasi tasdiqlandi.","ok");
     document.getElementById("authModeBtn").onclick=()=>setAuthMode("register");
     document.getElementById("authBackBtn").onclick=()=>setAuthMode("login");document.getElementById("authRole").onchange=updateRoleFields;
     document.getElementById("miniAuthForm").onsubmit=e=>{e.preventDefault();if(authBusy)return;authMode==="login"?doLogin():sendRegOtp()};
