@@ -188,6 +188,18 @@ def bootstrap(user):
     phone = normalize_phone(user.get("phone", ""))
     name = str(meta.get("full_name") or meta.get("name") or "Do'kon egasi").strip()[:120]
 
+    # An existing shop membership is authoritative. This must be checked
+    # before shop ownership so an invited SELLER does not accidentally open
+    # an old/personal Owner shop and therefore see an empty customer list.
+    existing = member_for(user)
+    if existing:
+        shop = one(
+            "shops", {"id": "eq." + existing["shop_id"], "select": "*", "limit": "1"}
+        )
+        if shop:
+            return existing, shop
+        raise RuntimeError("A'zolik do'koni topilmadi")
+
     # Owner is determined by ownership of a shop, not by whichever membership
     # row happens to be returned first.
     owned = one(
@@ -273,19 +285,6 @@ def bootstrap(user):
             },
         )[0]
         return member, shop
-
-    # An already-linked membership is authoritative. This is important when
-    # a seller retries registration: the invitation may already be active and
-    # linked to the same Supabase Auth user, so it must not be rejected merely
-    # because qz_registration_intent is still SELLER.
-    existing = member_for(user)
-    if existing:
-        shop = one(
-            "shops", {"id": "eq." + existing["shop_id"], "select": "*", "limit": "1"}
-        )
-        if shop:
-            return existing, shop
-        raise RuntimeError("A'zolik do'koni topilmadi")
 
     # Seller registration is never allowed to create a new shop.
     # The owner must first invite this exact phone number.

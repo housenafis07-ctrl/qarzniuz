@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store,no-cache,must-revalidate,max-age=0">
+<meta http-equiv="Pragma" content="no-cache">
+<title>QarzniUz</title>
+<script>
+(function(){
+  var target="/";
+  try{
+    var qs=new URLSearchParams(location.search);
+    var from=qs.get("from")||"telegram";
+    target="/?from="+encodeURIComponent(from)+"&t="+Date.now();
+  }catch(_){}
+  location.replace(target);
+})();
+</script>
+</head>
+<body>
+  <p>QarzniUz ochilmoqda...</p>
+</body>
+</html>
