@@ -12,7 +12,7 @@
 <div id="login" class="login hidden"><div class="loginbox"><h1>QarzniUz</h1><p class="muted">Do‘kon boshqaruv paneli uchun avval QarzniUz ilovasiga kiring.</p><button class="btn" onclick="returnToMainApp()">Asosiy ilovaga qaytish</button></div></div>
 <div id="app" class="app hidden"><aside class="side"><div class="brand">QarzniUz</div><div id="shopmini" class="shopmini"></div><div id="nav" class="nav"></div><button class="btn light" style="width:100%;margin-top:20px" onclick="returnToMainApp()">← Asosiy ilova</button></aside><main class="main"><div class="mobileTop"><b>QarzniUz</b><div style="display:flex;gap:6px"><button class="btn light" onclick="toggleShopLanguage()">🌐</button><button class="btn light" onclick="returnToMainApp()">Asosiy ilova</button></div></div><div id="mobileNav" class="mobileNav"></div><div class="top"><div><h1 id="title">Dashboard</h1><div class="muted" id="shop-subtitle">Bitta do‘kon — barcha sotuvchilar uchun bitta umumiy daftar</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn light" onclick="toggleShopLanguage()">🌐</button><span class="role" id="role"></span></div></div><section id="view"></section></main></div><div id="toast" class="toast"></div>
 <script>
-const SUPABASE_URL='https://yzicsoyufdghwiezqjsa.supabase.co',SUPABASE_ANON_KEY='sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM';const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});let ctx=null,data={customers:[],debts:[],payments:[],members:[]},current='dashboard';
+const SUPABASE_URL='https://yzicsoyufdghwiezqjsa.supabase.co',SUPABASE_ANON_KEY='sb_publishable_nneWyKMepgYOVpn8fVXwMA_4m98kinM';const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});let ctx=null,data={customers:[],debts:[],payments:[],members:[]},current='dashboard';
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])),money=n=>new Intl.NumberFormat('uz-UZ').format(Number(n||0))+' so‘m',customerName=id=>data.customers.find(x=>x.id===id)?.full_name||'—';
 function toast(s){const e=document.getElementById('toast');e.textContent=s;e.style.display='block';clearTimeout(window._t);window._t=setTimeout(()=>e.style.display='none',2600)}
 async function api(path,body){
@@ -35,8 +35,13 @@ async function api(path,body){
   }
   return j.data;
 }
-function returnToMainApp(){
-  // Keep the same authenticated browser session while leaving the shop panel.
+async function returnToMainApp(){
+  // Keep the newest in-memory session so the Telegram Mini App does not come
+  // back with an old refresh token after the shop panel refreshed the session.
+  try{
+    const {data:{session}}=await sb.auth.getSession();
+    if(session?.access_token) sessionStorage.setItem('qz_telegram_session',JSON.stringify(session));
+  }catch(e){console.warn('main app session handoff:',e)}
   sessionStorage.setItem('qarzniuz_return_main','1');
   window.location.assign('/?main=1&from=shop');
 }
