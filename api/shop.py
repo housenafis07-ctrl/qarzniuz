@@ -598,9 +598,17 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
-            user, member, shop = require_context(self)
             body = read_json(self)
             action = str(body.get("action", "")).lower()
+            if action == "claim_trial":
+                user = auth_user(self)
+                result = rpc("qz_claim_premium_trial", {})
+                if not isinstance(result, dict):
+                    raise RuntimeError("Premium sinov holatini olishda xato")
+                send_json(self, {"ok": True, "data": result})
+                return
+
+            user, member, shop = require_context(self)
             if action == "legacy_import":
                 if member["role"] not in ("OWNER", "SELLER"):
                     raise PermissionError("Do'kon a'zoligi talab qilinadi")
