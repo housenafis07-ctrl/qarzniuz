@@ -944,14 +944,7 @@
                     customers = JSON.parse(localStorage.getItem(userDebtsKey)) || [];
                 }
 
-                if (!localStorage.getItem('trial_given_' + currentUser.phone)) {
-                    const trialExpire = new Date();
-                    trialExpire.setDate(trialExpire.getDate() + 3);
-                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
-                    localStorage.setItem('premium_expire_date_' + currentUser.phone, trialExpire.toISOString());
-                    localStorage.setItem('trial_given_' + currentUser.phone, 'true');
-                    alert(L('alertTrialGiven'));
-                }
+                await claimPremiumTrial();
                 renderCustomers();
                 checkPremiumStatus();
                 updateLastBackupNote();
@@ -1494,6 +1487,39 @@ function openShopPanel(user) {
             const safePhone = phone.replace(/[^0-9]/g, '');
             const startParam = `pay_${safePhone}_${Date.now()}`;
             window.open(`https://t.me/${BOT_USERNAME}?start=${startParam}`, '_blank');
+        }
+
+        async function claimPremiumTrial() {
+            if (!currentUser || !supabaseClient) return;
+            try {
+                const { data: { session } } = await supabaseClient.auth.getSession();
+                if (!session?.access_token) return;
+                const response = await fetch('/api/shop', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + session.access_token
+                    },
+                    body: JSON.stringify({ action: 'claim_trial' }),
+                    cache: 'no-store'
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result.ok) {
+                    console.error('Premium trial:', result.error || response.status);
+                    return;
+                }
+                const trial = result.data || {};
+                if (trial.granted && trial.expires_at) {
+                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
+                    localStorage.setItem('premium_expire_date_' + currentUser.phone, trial.expires_at);
+                    alert(L('alertTrialGiven'));
+                } else if (trial.premium_until) {
+                    localStorage.setItem('is_premium_user_' + currentUser.phone, 'true');
+                    localStorage.setItem('premium_expire_date_' + currentUser.phone, trial.premium_until);
+                }
+            } catch (e) {
+                console.error('Premium trial:', e);
+            }
         }
 
         async function activatePro() {
