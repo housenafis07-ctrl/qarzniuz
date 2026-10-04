@@ -12,7 +12,7 @@ ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://yzicsoyufdghwiezqjsa.supabase.co")
 SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
 WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
-APP_URL = os.environ.get("APP_URL", "https://qarzniuz.vercel.app")
+APP_URL = os.environ.get("APP_URL", "https://qarzniuz.uz")
 CARD_NUMBER = os.environ.get("CARD_NUMBER", "")
 
 
