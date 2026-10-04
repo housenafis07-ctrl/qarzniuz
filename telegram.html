@@ -160,7 +160,7 @@ async function openAppAfterAuth(session){
 }
 async function withTimeout(promise,ms,label){
   let timer;
-  try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),ms)])}
+  try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),ms)})])}
   finally{clearTimeout(timer)}
 }
 async function doLogin(){
