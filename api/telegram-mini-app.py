@@ -139,6 +139,42 @@ def require_supabase_user(h):
     return user, token
 
 
+def supabase_auth_token(grant_type, payload):
+    key = SUPABASE_ANON_KEY
+    if not SUPABASE_URL or not key:
+        raise RuntimeError("Supabase Auth konfiguratsiyasi to'liq emas")
+    url = SUPABASE_URL + "/auth/v1/token?grant_type=" + urllib.parse.quote(grant_type, safe="")
+    raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=raw, method="POST")
+    req.add_header("apikey", key)
+    req.add_header("Authorization", "Bearer " + key)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            text = r.read().decode("utf-8")
+            return json.loads(text) if text else {}
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        try:
+            obj = json.loads(detail)
+            raise PermissionError(str(obj.get("error_description") or obj.get("msg") or obj.get("message") or "Telefon yoki PIN-kod noto'g'ri"))
+        except json.JSONDecodeError:
+            raise PermissionError("Telefon yoki PIN-kod noto'g'ri")
+
+
+def login_qz_user(phone, password):
+    if not phone or not password:
+        raise PermissionError("Telefon va PIN-kod kerak")
+    return supabase_auth_token("password", {"phone": str(phone), "password": str(password)})
+
+
+def refresh_qz_session(refresh_token):
+    if not refresh_token:
+        raise PermissionError("QarzniUz sessiyasi eskirgan. Qayta kiring.")
+    return supabase_auth_token("refresh_token", {"refresh_token": str(refresh_token)})
+
+
 def get_all_telegram_links():
     # Avoid PostgREST eq filters for this small link table. The previous
     # implementation reached PostgREST with the operator stripped and caused
@@ -241,6 +277,31 @@ class handler(BaseHTTPRequestHandler):
                         "telegram": tg_user,
                         "linked": bool(link and link.get("status") == "active"),
                         "user_id": link.get("user_id") if link else None,
+                    },
+                })
+                return
+
+            if action == "login":
+                phone = str(body.get("phone") or "").strip()
+                password = str(body.get("password") or "")
+                session = login_qz_user(phone, password)
+                send_json(self, {
+                    "ok": True,
+                    "data": {
+                        "session": session,
+                        "telegram_user_id": tg_user["telegram_user_id"],
+                    },
+                })
+                return
+
+            if action == "refresh":
+                refresh_token = str(body.get("refresh_token") or "").strip()
+                session = refresh_qz_session(refresh_token)
+                send_json(self, {
+                    "ok": True,
+                    "data": {
+                        "session": session,
+                        "telegram_user_id": tg_user["telegram_user_id"],
                     },
                 })
                 return
